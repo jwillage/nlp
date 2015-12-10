@@ -25,4 +25,15 @@ inspect(crudeTDM)[crudeTDMhf, 1:10]
 findAssocs(crudeTDM, "saudi", .8)
 
 zs <- ZipSource(fn, pattern = "US.*txt", recursive = T)
-c <- Corpus(zs, readerControl = list(reader = readPlain,  language = "en_US", load = TRUE))
+corp <- Corpus(zs, readerControl = list(reader = readPlain,  language = "en_US", load = TRUE))
+
+corp.samp <- list()
+for (i in l$Name[grep("US.*txt", l$Name)]){
+  df.source <- DataframeSource(data.frame(c= readLines(unz("data/Coursera-SwiftKey.zip", i), 100)))
+  corp.samp[[length(corp.samp) + 1]] <- Corpus(df.source, readerControl = 
+                                                 list(reader = readPlain,  language = "en_US", 
+                                                      load = TRUE))
+}
+
+#when ready, combine into single corpus
+#a <- c(corp.samp[[1]], corp.samp[[2]], corp.samp[[3]])
