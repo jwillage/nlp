@@ -19,40 +19,28 @@ en[["twitter"]] <- tmp[[7]]; en[["news"]] <- tmp[[8]]; en[["blogs"]] <- tmp[[9]]
 rm(tmp)
 saveRDS(en, "data/readLines_list_all_EN.RDS")
 
-nc <- sapply(en, nchar)
-lapply(nc, max)
+lapply(sapply(en, nchar), max)
 #the longest document is in the blogs data set, over 40K characters
 
-# #read each file in as 1 large corpus
-# zs <- ZipSource(fn, pattern = "US.*txt", recursive = T)
-# corp <- Corpus(zs, readerControl = list(reader = readPlain,  language = "en_US", load = TRUE))
-
-# #read in files broken up by line
-# corp.samp <- list()
-# for (i in l$Name[grep("US.*txt", l$Name)]){
-#   df.source <- DataframeSource(data.frame(c= readLines(unz(fn, i), 1000)))
-#   corp.samp[[length(corp.samp) + 1]] <- Corpus(df.source, readerControl = 
-#                                                  list(reader = readPlain,  language = "en_US", 
-#                                                       load = TRUE))
-# }
-
 corp <- lapply(en, corpus)
+rm(en)
 
 #when ready, combine into single corpus
 #t <- c(corp.samp[[1]], corp.samp[[2]], corp.samp[[3]])
 
-#remove stop words
-sw <- readLines("stop.txt")
-rw <- function(x) removeWords(x, sw)
+#tokenize and remove stopwords, etc.
 #we make the decision to remove punctuation, numbers, whitepsace, stopwords, change to lower
-funs <- list(stripWhitespace, rw, content_transformer(tolower), removePunctuation, removeNumbers)
-corp.samp.mod <- lapply(corp.samp, function(x) tm_map(x, FUN = tm_reduce, tmFuns = funs))
+
+# a simple vector version in case we can use in the future. much smaller.
+#tok <- lapply(corp, function(x) toLower(tokenize(x, removeNumbers = T, removePunct = T, 
+#                                                 removeSeparators = T, simplify = T )))
+tok.list <- lapply(corp, function(x) toLower(tokenize(x, removeNumbers = T, removePunct = T, 
+                                                 removeSeparators = T)))
+tok.list.s <- lapply(tok.list, function(x) removeFeatures(x, readLines("stop.txt")))
+rm(tok.list)
 
 
-corp.twitter <- corpus(t[[1]])
 dfm.en <- lapply(t, dfm)
-
-dfm.twitter.tm <- as.TermDocumentMatrix(dfm.twitter, weighting = weightTf)
 
 #think about removing terms that only appear once?
 #try removeSparseTerms(bigTDM, sparse= 0.8)
@@ -83,4 +71,3 @@ cbind(freq.sort[[1]][1:50,], freq.sort[[2]][1:50,], freq.sort[[3]][1:50,])
 #compare how conversational twitter is, with most freq term being "you" (also see "your" at no. 3)
 #that appears much lower in news, and blogs somehwere in between. 
 
-removeFeatures(x, stopwords())
