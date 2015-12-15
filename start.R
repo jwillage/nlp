@@ -36,38 +36,50 @@ rm(en)
 #                                                 removeSeparators = T, simplify = T )))
 tok.list <- lapply(corp, function(x) toLower(tokenize(x, removeNumbers = T, removePunct = T, 
                                                  removeSeparators = T)))
+#remove profane stopwords
 tok.list.s <- lapply(tok.list, function(x) removeFeatures(x, readLines("stop.txt")))
-rm(tok.list)
+tok.list <- tok.list.s
+rm(tok.list.s)
 
-
-dfm.en <- lapply(t, dfm)
+#create document frequency matrices
+dfm.en <- lapply(tok.list, dfm)
 
 #think about removing terms that only appear once?
 #try removeSparseTerms(bigTDM, sparse= 0.8)
 
+#view 20 most frequent tokens
+lapply(dfm.en, topfeatures)
 
-#tokenize
-#MC_tokenize each document in a corpus. lapply that over each of the corpora. 
-tok <- lapply(corp.samp.mod, function(x) sapply(x, function(y) MC_tokenizer(y)))
-#to return 1 large token list of a single corpus
-token.corpus <- lapply(tok, function(x) unlist(x))
+#we see the top 50 tokens for twitter, news, blogs
+#the topfeatures show how conversational (and narcissistic) twitter is. 
+#news seems more objective, with "said", "he", "was", etc appearing near the top of the list
+#blogs looks like it's in-between twitter and news, as we might imagine.
 
-#frequency exploration
-tdm <-lapply(corp.samp.mod, function(x) TermDocumentMatrix(x))
-sm <- lapply(tdm, function(x) sparseMatrix(i=x$i, j=x$j, x=x$v))
-freq <- list()
-for (i in 1:length(sm))
-  freq[[length(freq) +1]] <- data.frame(term = tdm[[i]]$dimnames$Terms, freq = rowSums(sm[[i]]))
+sapply(dfm.en, ncol)
+#twitter has the most diverse set of terms, over 400K
 
-#view 50 most frequent tokens
-freq.sort <- lapply(freq, function(x) x[order(x$freq, decreasing = T), ])
-cbind(freq.sort[[1]][1:50,], freq.sort[[2]][1:50,], freq.sort[[3]][1:50,])
+#build n-grams
+bigram.test <- lapply(corp, function(x) tokenize(x, removeNumbers = T, removePunct = T, 
+                                                    removeSeparators = T, ngrams = 2, simplify = T))
+bigram <- lapply(corp, function(x) tokenize(toLower(x), removeNumbers = T, removePunct = T, 
+                                                    removeSeparators = T, ngrams = 2))
+trigram <- lapply(corp, function(x) tokenize(toLower(x), removeNumbers = T, removePunct = T, 
+                                            removeSeparators = T, ngrams = 3))
 
-#mapply(cbind, freq[[1]]$freq[1:50], freq[[2]]$freq[1:50], freq[[3]]$freq[1:50])
-#do.call(mapply, c(cbind,  freq))
+#explore n-grams in each corpus
 
-#we see the top 50 tokens for twitter, news, blogs, respectively
-#twitter seems to be a lot more diversified, with only two terms from the sample appearing > 100x
-#compare how conversational twitter is, with most freq term being "you" (also see "your" at no. 3)
-#that appears much lower in news, and blogs somehwere in between. 
+#Total terms
 
+#unique unigrams
+sapply(dfm.en, ncol)
+#twitter    news   blogs 
+#419417  331755  380867 
+#unique bigrams
+
+#unique trigrams
+sapply(trigram, function(x) length(unique(unlist(x))))
+# twitter     news    blogs 
+#13581787 17875031 18951463 
+
+#leave in profranity and manually give them a 0 probability. This way we don't make weird n-grams
+#of incomplete sentences. 
