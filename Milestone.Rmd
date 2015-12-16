@@ -15,10 +15,10 @@ if we have a term frequency list as follows:
 
 Term    Frequency    index
 ------- ---------- --------
-the box  .05        the
-the cat  .15        the
-the oven  .02       the
-the king  .01       the
+the box  .05        the  
+the cat  .15        the  
+the oven  .02       the  
+the king  .01       the  
 
 We will only store the highest frequency term for the given index, "the". In fact, we don't even
 need the frequency at that point.
