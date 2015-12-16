@@ -83,3 +83,24 @@ sapply(trigram, function(x) length(unique(unlist(x))))
 
 #leave in profranity and manually give them a 0 probability. This way we don't make weird n-grams
 #of incomplete sentences. 
+#consider leaving in numbers for the same reason
+#handle twitter mentions. otherwise replace @ with "at"
+
+#calculate frequencies
+bi.samp <- bigram[[1]][1:10000]
+bi.samp.un <- unlist(bi.samp)
+freq <- table(bi.samp.un)/length(bi.samp.un)
+tf <- as.data.frame(freq, row.names = NULL, stringsAsFactors = F)
+names(tf) <- c("term", "rf")
+#here we see the top relative frequencies
+head(tf[order(tf$rf, decreasing = T),], 50)
+
+#remove grams with profanity
+sw <- paste0("(([^a-z]+|^)(", 
+             paste(readLines(paste0("https://github.com/shutterstock/",
+                             "List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words/raw/master/en")
+                             ), sep = "", collapse = "|")
+             , ")([^a-z]+|$)|", paste0(readLines("stop.txt"), sep = "", collapse = "|"), ")")
+#further filter profane words that may appear mid-word
+idx <- grep(sw, tf$term)  #remove these
+tf <- tf[-idx, ]
