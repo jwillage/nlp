@@ -32,7 +32,14 @@ The average length of news and blogs are a bit higher than the medians. This ske
 very long texts. The longest text in our corpora ia a blog, with more than 40 thousand characters. 
 Note the 140 character limit on tweets.  
 
+##Tokenizing  
+The first step in building a language model is to **tokenize**, which involves break a sentence 
+down into individual words, or pairs of words, or triplets of words, etc. These tokens are what we 
+call *n*-grams, where *n* is the number of words. 
 
+At this point we also make the decision to filter out whitespace and puncutation, and covert all 
+text to lowercase. This makes for easier processing down the line, by having a more uniform set of 
+texts. 
 
 ##Model Design  
 To save space, we will not store all possible *n*-grams indexed by their *n-1*-grams. Instead, we 
@@ -53,6 +60,11 @@ Term     index
 -------  --------
 the box  the  
 
+
+##Filtering  
+
+Filtering, such as profanity and numbers, are done at the n-gram level, so we don't have sentences
+with gaps
 
 
 ##Future Plans  
