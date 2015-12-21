@@ -20,8 +20,6 @@ en[["twitter"]] <- tmp[[7]]; en[["news"]] <- tmp[[8]]; en[["blogs"]] <- tmp[[9]]
 rm(tmp)
 saveRDS(en, "data/readLines_list_all_EN.RDS")
 
-lapply(sapply(en, nchar), max)
-#the longest document is in the blogs data set, over 40K characters
 
 #break up sentences by period, only for news. blogs and twitter have less reliable breaks
 en[["news"]] <- unlist(stri_split_boundaries(en[["news"]], type = "sentence", 
@@ -74,7 +72,7 @@ quadgram <- lapply(corp, function(x) tokenize(toLower(x), removeNumbers = T, rem
 quadgram <- list()
 system.time(twitter <- tokenize(toLower(corp[[1]]), removeNumbers = F, removePunct = T, 
                                 removeSeparators = T, ngrams = 4))
-#break up sentences
+#need to remove remaining puct (apostrophes)
 head(bigram.test[[1]])
 
 
@@ -105,12 +103,15 @@ sapply(quadgram.samp, function(x) length(unique(unlist(x))))
 #calculate frequencies
 createModel <- function(gram, n){
   #assumes list of corpora
-  
+  print("create model begin")
+  print(timestamp())
   gram <- lapply(gram, unlist)
   #rounding to 8 works for sample, may need to increase precision for larger corpora
   #ie length of samp[[1]] == 114293. 1/114293 = 8.7e-6. can round after that (keep 2 extra JICOC)
-  print("unlisted")
 
+  print("creating freq tables")
+  print(timestamp())
+  
   f<- lapply(gram, function(x) table(x))
   rf <- lapply(gram, function(x) round(table(x)/length(x), 8))
   tf <- list()
@@ -119,7 +120,9 @@ createModel <- function(gram, n){
     tf[[i]]$abs <- f[[i]]
   }
   rm(f); rm(rf);
-  print("freq table built")
+  
+  print("gram filtering")
+  print(timestamp())
   
   #lapply(tf, function(x) head(x[order(x$Freq, decreasing = T),], 50))
   #here we see the top relative frequencies
@@ -149,7 +152,9 @@ createModel <- function(gram, n){
     if (length(idx) > 0) tf.s[[i]] <- tf[[i]][-idx, ]
   }
   rm(tf);  rm(sw);
-  print("stops removed")
+
+  print("indexing")
+  print(timestamp())
   
   #Indexing. For bigrams, only take [1] the first word to index
   #for n>2, need to combine 1 - n-1 into a single word index
@@ -160,15 +165,17 @@ createModel <- function(gram, n){
     if (n > 2)  for(j in 2:(n - 1))  p <- paste(p, t[seq(j, length(t), by = n - 1)])
     tf.s[[i]]$idx <- p
   }
-  print("initial indexing done")
   
-  #consider removing indexes that only appear once
+  print("lookup")
+  print(timestamp())
   
   #only keep the most frequent ngram by index
   lookup <- lapply(tf.s, function(x) setNames(aggregate(x$Freq, by = list(x$idx), max), 
                                               c("idx", "Freq")))
-  print("created lookup")
  # if we take only trigram indexes that appear more than once, we have 20943 out of 319675 ~ 6%
+  
+  print("create model")
+  print(timestamp())
   
   model <- list()
   for (i in 1:length(tf.s)){
@@ -179,7 +186,6 @@ createModel <- function(gram, n){
     #remove first n-1 grams and keep only the term to predict
     model[[i]]$x <- unlist(lapply(strsplit(model[[i]]$x, "_"), function(x) unclass(x)[n]))
   }
-  print("created list of models")
   #sanity check, "i love" highest freq for index "i" in twitter
   #tf[[1]][tf[[1]]$idx == "i", ][order(tf[[1]][tf[[1]]$idx == "i", "Freq"]), ]
   #model.bi[[1]][model.bi[[1]]$idx == "i",]
@@ -192,7 +198,15 @@ createModel <- function(gram, n){
   #2. whoever has higher RELATIVE freq wins
   
   model <- rbind.fill(model)
+  
+  print("create singular lookup")
+  print(timestamp())
+  
   lookup <- setNames(aggregate(model$abs, by = list(model$idx), max), c("idx", "maxAbs"))
+  
+  print("final merge")
+  print(timestamp())
+  
   final <- merge(lookup, model, by.x = c("idx", "maxAbs"), by.y = c("idx", "abs"))
  
   final[, c("idx", "x")]
@@ -210,7 +224,14 @@ model.tri <- createModel(tri.samp, 3)
 quadgram.samp <- lapply(quadgram, function(x) x[1:10000])
 model.quad <- createModel(quadgram.samp, 4)
 
-model.tri <- createModel(readRDS("data/bigram_EN.RDS"), 2)
-saveRDS(model.bi.full, "model/model_bi_EN.RDS")
+system.time(model.tri <- createModel(readRDS("data/trigram_EN.RDS"), 2))
+saveRDS(model.tri, "model/model_tri_EN.RDS")
+system.time(model.quad <- createModel(readRDS("data/quadgram_EN.RDS"), 4))
+saveRDS(model.quad, "model/model_quad_EN.RDS")
+
+
 
 #backoff and smoothing
+
+#consider using unigrams from news dataset as a dictionary. combine that with a frequency threshold
+#so things like lol and omg (both high frequency) don't get filtered out. 
