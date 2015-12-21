@@ -7,6 +7,7 @@ output:
 
 ```{r options, echo = FALSE}
 library(knitr)
+library(quanteda)
 opts_chunk$set(cache = TRUE, echo = FALSE, comment = NA)
 ```
 
@@ -40,6 +41,27 @@ call *n*-grams, where *n* is the number of words.
 At this point we also make the decision to filter out whitespace and puncutation, and covert all 
 text to lowercase. This makes for easier processing down the line, by having a more uniform set of 
 texts. 
+
+```{r tokenize and dfm}
+corp <- lapply(en, corpus)
+rm(en)
+
+tok.list <- lapply(corp, function(x) toLower(tokenize(x, removeNumbers = F, removePunct = T, 
+                                                      removeSeparators = T)))
+#create document frequency matrices
+dfm.en <- lapply(tok.list, dfm)
+```
+
+Let's take a look at the most frequent tokens of uni-grams (single words)
+
+```{r topfeatures}
+lapply(dfm.en, topfeatures)
+```
+
+We see the top 50 tokens for twitter, news, blogs the topfeatures show how conversational (and
+narcissistic) twitter is. News seems more objective, with "said", "he", "was", etc appearing near
+the top of the list. Blogs looks like it's in-between twitter and news, as we might imagine.
+
 
 ##Model Design  
 To save space, we will not store all possible *n*-grams indexed by their *n-1*-grams. Instead, we 

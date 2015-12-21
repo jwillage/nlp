@@ -1,6 +1,14 @@
 # Milestone
 
 
+```
+## 
+## Attaching package: 'quanteda'
+## 
+## The following object is masked from 'package:base':
+## 
+##     sample
+```
 
 ##Corpora Summary  
 
@@ -19,8 +27,69 @@ blogs    899288     230    156   40833
 ```
 
 The average length of news and blogs are a bit higher than the medians. This skew is caused by some 
-very long texts. The longest text in our corpora ia a blog, with more than 40 thousand characters.  
+very long texts. The longest text in our corpora ia a blog, with more than 40 thousand characters. 
+Note the 140 character limit on tweets.  
 
+##Tokenizing  
+The first step in building a language model is to **tokenize**, which involves break a sentence 
+down into individual words, or pairs of words, or triplets of words, etc. These tokens are what we 
+call *n*-grams, where *n* is the number of words. 
+
+At this point we also make the decision to filter out whitespace and puncutation, and covert all 
+text to lowercase. This makes for easier processing down the line, by having a more uniform set of 
+texts. 
+
+
+```
+Non-UTF-8 encoding (possibly) detected  :windows-1252.
+Non-UTF-8 encoding (possibly) detected  :windows-1252.
+```
+
+```
+
+   ... indexing documents: 2,360,148 documents
+   ... indexing features: 441,342 feature types
+   ... created a 2360148 x 441342 sparse dfm
+   ... complete. 
+Elapsed time: 131.383 seconds.
+
+   ... indexing documents: 1,010,242 documents
+   ... indexing features: 379,069 feature types
+   ... created a 1010242 x 379069 sparse dfm
+   ... complete. 
+Elapsed time: 132.352 seconds.
+
+   ... indexing documents: 899,288 documents
+   ... indexing features: 402,909 feature types
+   ... created a 899288 x 402909 sparse dfm
+   ... complete. 
+Elapsed time: 138.689 seconds.
+```
+
+Let's take a look at the most frequent tokens of uni-grams (single words)
+
+
+```
+$twitter
+   the     to      i      a    you    and    for     in     of     is 
+936548 787265 722284 609331 547675 438150 385046 377938 359146 358702 
+
+$news
+    the      to     and       a      of      in     for    that      is 
+1971527  901082  884895  875081  771072  674033  351163  346961  284107 
+     on 
+ 266791 
+
+$blogs
+    the     and      to       a      of       i      in    that      is 
+1857795 1091883 1066175  897901  875281  773869  594142  460356  432391 
+     it 
+ 403137 
+```
+
+We see the top 50 tokens for twitter, news, blogs the topfeatures show how conversational (and
+narcissistic) twitter is. News seems more objective, with "said", "he", "was", etc appearing near
+the top of the list. Blogs looks like it's in-between twitter and news, as we might imagine.
 
 
 ##Model Design  
@@ -42,6 +111,11 @@ Term     index
 -------  --------
 the box  the  
 
+
+##Filtering  
+
+Filtering, such as profanity and numbers, are done at the n-gram level, so we don't have sentences
+with gaps
 
 
 ##Future Plans  

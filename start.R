@@ -28,25 +28,6 @@ corp <- lapply(en, corpus)
 rm(en)
 
 
-# a simple vector version in case we can use in the future. much smaller.
-#tok <- lapply(corp, function(x) toLower(tokenize(x, removeNumbers = T, removePunct = T, 
-#                                                 removeSeparators = T, simplify = T )))
-tok.list <- lapply(corp, function(x) toLower(tokenize(x, removeNumbers = T, removePunct = T, 
-                                                      removeSeparators = T)))
-
-#create document frequency matrices
-dfm.en <- lapply(tok.list, dfm)
-
-#think about removing terms that only appear once?
-#try removeSparseTerms(bigTDM, sparse= 0.8)
-
-#view 20 most frequent tokens
-lapply(dfm.en, topfeatures)
-
-#we see the top 50 tokens for twitter, news, blogs
-#the topfeatures show how conversational (and narcissistic) twitter is. 
-#news seems more objective, with "said", "he", "was", etc appearing near the top of the list
-#blogs looks like it's in-between twitter and news, as we might imagine.
 
 sapply(dfm.en, ncol)
 #twitter has the most diverse set of terms, over 400K
