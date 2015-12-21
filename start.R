@@ -20,22 +20,13 @@ en[["twitter"]] <- tmp[[7]]; en[["news"]] <- tmp[[8]]; en[["blogs"]] <- tmp[[9]]
 rm(tmp)
 saveRDS(en, "data/readLines_list_all_EN.RDS")
 
-
 #break up sentences by period, only for news. blogs and twitter have less reliable breaks
 en[["news"]] <- unlist(stri_split_boundaries(en[["news"]], type = "sentence", 
                                              skip_sentence_sep = T))
 
-#filtering, such as profanity and numbers, are done at the n-gram level, so we don't have 
-#sentences with gaps
-
 corp <- lapply(en, corpus)
 rm(en)
 
-#when ready, combine into single corpus
-#t <- c(corp.samp[[1]], corp.samp[[2]], corp.samp[[3]])
-
-#tokenize and remove stopwords, etc.
-#we make the decision to remove punctuation, numbers, whitepsace, stopwords, change to lower
 
 # a simple vector version in case we can use in the future. much smaller.
 #tok <- lapply(corp, function(x) toLower(tokenize(x, removeNumbers = T, removePunct = T, 
