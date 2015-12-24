@@ -8,6 +8,7 @@ output:
 ```{r options, echo = FALSE}
 library(knitr)
 library(quanteda)
+library(ggplot2)
 opts_chunk$set(cache = TRUE, echo = FALSE, comment = NA)
 ```
 
@@ -55,13 +56,41 @@ dfm.en <- lapply(tok.list, dfm)
 Let's take a look at the most frequent tokens of uni-grams (single words)
 
 ```{r topfeatures}
-lapply(dfm.en, topfeatures)
+lapply(dfm.en, topfeatures, n = 15)
 ```
 
-We see the top 50 tokens for twitter, news, blogs the topfeatures show how conversational (and
-narcissistic) twitter is. News seems more objective, with "said", "he", "was", etc appearing near
-the top of the list. Blogs looks like it's in-between twitter and news, as we might imagine.
+We see the top 15 tokens for twitter, news, and blogs. Most of the top features in all the corpora 
+are words that help construct sentences, like "the", "and", "to", "a". The inclusion of "you" and
+"me" highlight how conversational twitter is. The news seems more objective, with "said", "he", and "was" all in the top 15. The blogs corpus appears to be a cross between the other
+two; containing both "you" and "was".
 
+We see the unique list of uni-grams for each corpus:  
+```{r unigrams}
+print(nc <- sapply(dfm.en, ncol)) 
+single <- sapply(dfm.en, function(x) sum(colSums(x) == 1))
+```
+
+While twitter may have the largest number here, it's important to remember what we're looking at. 
+There hasn't been any filtering yet, only tokenization. That means everything with a space on both
+sides is considered a uni-gram here. That includes numbers, @mentions, misspellings, etc. In fact,
+of twitter's `r nc[1]` terms, only `r 100 - round((single/nc)[1] * 100, 0)`% are used more than once. Here are the numbers for all the sets:
+
+```{r}
+mult <- data.frame("Single" = single, "Unique" = nc, 
+                   "Percent.Single" = round((single/nc) * 100, 2))
+#show size as amount of unique words, bar as %age used more than once
+# or x and y axes as above. size = total tokens (unique and nonunique)
+tot <- sapply(dfm.en, function(x) sum(ntoken(x)))
+g <- ggplot(aes(x = Unique, y = Percent.Single), data = mult)
+g + geom_point(aes(size = tot + 5e6), color = "grey")  + 
+  geom_point(aes(size = tot ), color = "lightblue") +
+  scale_size_continuous(range=c(10, 20 ), guide = FALSE) +
+  labs(x = "Unique tokens", y = "Percentage used once", 
+       title = "Unique Tokens vs Percentage Used Once, sized by Total Tokens") +
+  geom_text(label=rownames(mult), color = "black", size = 8)
+
+# + label each point
+```
 
 ##Model Design  
 To save space, we will not store all possible *n*-grams indexed by their *n-1*-grams. Instead, we 

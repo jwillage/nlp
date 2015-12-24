@@ -73,24 +73,40 @@ Let's take a look at the most frequent tokens of uni-grams (single words)
 $twitter
    the     to      i      a    you    and    for     in     of     is 
 936548 787265 722284 609331 547675 438150 385046 377938 359146 358702 
+    it     my     on   that     me 
+294722 291778 276997 234569 202301 
 
 $news
     the      to     and       a      of      in     for    that      is 
 1971527  901082  884895  875081  771072  674033  351163  346961  284107 
-     on 
- 266791 
+     on    with    said      he     was      it 
+ 266791  254722  250393  228946  228932  219703 
 
 $blogs
     the     and      to       a      of       i      in    that      is 
 1857795 1091883 1066175  897901  875281  773869  594142  460356  432391 
-     it 
- 403137 
+     it     for     you    with     was      on 
+ 403137  363234  298134  286504  278271  274392 
 ```
 
-We see the top 50 tokens for twitter, news, blogs the topfeatures show how conversational (and
-narcissistic) twitter is. News seems more objective, with "said", "he", "was", etc appearing near
-the top of the list. Blogs looks like it's in-between twitter and news, as we might imagine.
+We see the top 15 tokens for twitter, news, and blogs. Most of the top features in all the corpora 
+are words that help construct sentences, like "the", "and", "to", "a". The inclusion of "you" and
+"me" highlight how conversational twitter is. The news seems more objective, with "said", "he", and "was" all in the top 15. The blogs corpus appears to be a cross between the other
+two; containing both "you" and "was".
 
+We see the unique list of uni-grams for each corpus:  
+
+```
+twitter    news   blogs 
+ 441342  379069  402909 
+```
+
+While twitter may have the largest number here, it's important to remember what we're looking at. 
+There hasn't been any filtering yet, only tokenization. That means everything with a space on both
+sides is considered a uni-gram here. That includes numbers, @mentions, misspellings, etc. In fact,
+of twitter's 441342 terms, only 38% are used more than once. Here are the numbers for all the sets:
+
+![](Milestone_files/figure-html/unnamed-chunk-1-1.png) 
 
 ##Model Design  
 To save space, we will not store all possible *n*-grams indexed by their *n-1*-grams. Instead, we 
