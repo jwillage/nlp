@@ -9,15 +9,18 @@ output:
 library(knitr)
 library(quanteda)
 library(ggplot2)
-opts_chunk$set(cache = TRUE, echo = FALSE, comment = NA)
+library(gridExtra)
+opts_chunk$set(cache = TRUE, echo = FALSE, comment = NA, message = FALSE, warnings = FALSE)
 ```
 
-##Corpora Summary  
+##Exploratory Analysis
+
+###Corpora Summary  
 ```{r read in EN}
 en <- readRDS("data/readLines_list_all_EN.RDS")
 ```
 
-Before breaking down any text into *n*-grams or doing any natural language processing, we'll 
+Before breaking down any text and performing natural language processing, we'll 
 explore the texts just as they are provided to us. We have three corpora, namely: twitter; news; and
 blogs. Here we see the number of texts in each corpus, along with the mean, median, and max 
 characters per text.  
@@ -31,17 +34,18 @@ round(summ, 0)
 ```
 
 The average length of news and blogs are a bit higher than the medians. This skew is caused by some 
-very long texts. The longest text in our corpora ia a blog, with more than 40 thousand characters. 
+very long texts. The longest text in our corpora is a blog with more than 40 thousand characters. 
 Note the 140 character limit on tweets.  
 
-##Tokenizing  
-The first step in building a language model is to **tokenize**, which involves break a sentence 
-down into individual words, or pairs of words, or triplets of words, etc. These tokens are what we 
-call *n*-grams, where *n* is the number of words. 
+###Tokenizing  
+The first step in building a language model is **tokenizing**, which involves break a sentence 
+down into individual words (or pairs of words, or triplets of words, etc). These tokens are what we 
+call *n*-grams, where *n* is the number of words. For example, "the", "cat", "jumped" are all 
+1-grams (uni-grams), whereas "the cat", "cat jumped" are 2-grams (bigrams).
 
-At this point we also make the decision to filter out whitespace and puncutation, and covert all 
-text to lowercase. This makes for easier processing down the line, by having a more uniform set of 
-texts. 
+During the tokenization phase, we also make the decision to filter out whitespace and puncutation,
+and covert all text to lowercase. This makes for easier processing down the line, by having a more
+uniform set of texts. 
 
 ```{r tokenize and dfm}
 corp <- lapply(en, corpus)
@@ -53,10 +57,17 @@ tok.list <- lapply(corp, function(x) toLower(tokenize(x, removeNumbers = F, remo
 dfm.en <- lapply(tok.list, dfm)
 ```
 
-Let's take a look at the most frequent tokens of uni-grams (single words)
+Let's take a look at the most frequent tokens of uni-grams and their counts.  
 
 ```{r topfeatures}
-lapply(dfm.en, topfeatures, n = 15)
+tf <-lapply(dfm.en, function(x) {
+  t <- topfeatures(x, 15)
+  data.frame(frequency = t, term = names(t))})
+
+g <- lapply(tf, function(x) ggplot(aes(x = reorder(term, frequency, min), y = frequency), data = x)
+            + geom_histogram(stat = "identity") + xlab("term"))
+for (i in 1:length(g)) g[[i]] <- g[[i]] + ggtitle(names(tf)[i])
+grid.arrange(g[[1]], g[[2]], g[[3]], nrow = 3)
 ```
 
 We see the top 15 tokens for twitter, news, and blogs. Most of the top features in all the corpora 
@@ -64,7 +75,7 @@ are words that help construct sentences, like "the", "and", "to", "a". The inclu
 "me" highlight how conversational twitter is. The news seems more objective, with "said", "he", and "was" all in the top 15. The blogs corpus appears to be a cross between the other
 two; containing both "you" and "was".
 
-We see the unique list of uni-grams for each corpus:  
+Now we'll explore the *unique* number of uni-grams for each corpus:  
 ```{r unigrams}
 print(nc <- sapply(dfm.en, ncol)) 
 single <- sapply(dfm.en, function(x) sum(colSums(x) == 1))
@@ -73,7 +84,7 @@ single <- sapply(dfm.en, function(x) sum(colSums(x) == 1))
 While twitter may have the largest number here, it's important to remember what we're looking at. 
 There hasn't been any filtering yet, only tokenization. That means everything with a space on both
 sides is considered a uni-gram here. That includes numbers, @mentions, misspellings, etc. In fact,
-of twitter's `r nc[1]` terms, only `r 100 - round((single/nc)[1] * 100, 0)`% are used more than once. Here are the numbers for all the sets:
+of twitter's `r nc[1]` terms, only `r 100 - round((single/nc)[1] * 100, 0)`% are used more than once. This plot describes all the corpora:  
 
 ```{r}
 mult <- data.frame("Single" = single, "Unique" = nc, 
@@ -92,7 +103,12 @@ g + geom_point(aes(size = tot + 5e6), color = "grey")  +
 # + label each point
 ```
 
-##Model Design  
+
+While 
+
+##Future Plans  
+
+###Model Design  
 To save space, we will not store all possible *n*-grams indexed by their *n-1*-grams. Instead, we 
 only need to store the *n*-gram with the highest frequency of it's *n-1*-gram index. For instance, 
 if we have a term frequency list as follows:  
@@ -112,13 +128,13 @@ Term     index
 the box  the  
 
 
-##Filtering  
+###Filtering  
 
 Filtering, such as profanity and numbers, are done at the n-gram level, so we don't have sentences
 with gaps
 
 
-##Future Plans  
+###Down the Line  
 Plan to add a part of speech (POS) tagger for unseen n-grams. We'll create a small frequency list 
 for each of the parts of speech (possibly trained on our data). Then instead of blindly returning 
 the highest occuring token, we will return the highest occuring token given the POS.  
