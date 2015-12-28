@@ -27,21 +27,25 @@ saveRDS(en, "data/readLines_list_all_EN.RDS")
 corp <- lapply(en, corpus)
 rm(en)
 
+
+trigram[["twitter"]] <- tokenize(toLower(corp[[1]]), removePunct = T, removeSeparators = T, 
+                                 concatenator = " ", ngrams = 3)
+trigram[["news"]] <- tokenize(toLower(corp[[2]]), removePunct = T, removeSeparators = T, 
+                              concatenator = " ", ngrams = 3)
+trigram[["blogs"]] <- tokenize(toLower(corp[[3]]), removePunct = T, removeSeparators = T, 
+                              concatenator = " ", ngrams = 3)
+saveRDS(trigram, "data/trigram_EN_new.RDS")
+
 #build n-grams
 unigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = T, removeSeparators = T, 
                                              concatenator = " ", ngrams = 1))
 unigram.samp.100000 <- lapply(unigram, sample, 100000)
 bigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = T, removeSeparators = T, 
                                             concatenator = " ", ngrams = 2))
-saveRDS(bigram, "data/bigram_EN_new.RDS")
 bigram.samp.100000 <- lapply(bigram, sample, 100000)
-save.image()
-system.time(trigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = T, removeSeparators = T, 
-                                            concatenator = " ", ngrams = 3)))
-saveRDS(trigram, "data/trigram_EN_new.RDS")
+trigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = T, removeSeparators = T, 
+                                            concatenator = " ", ngrams = 3))
 trigram.samp.100000 <- lapply(trigram, sample, 100000)
-saveRDS(trigram.samp.100000, "data/trigram_EN_samp_100000.RDS")
-
 
 quadgram <- lapply(corp, function(x) tokenize(toLower(x), removeNumbers = T, removePunct = T, 
                                               removeSeparators = T, ngrams = 3))
@@ -153,6 +157,8 @@ createModel <- function(gram, n){
   print(paste(timestamp(quiet = T), "merge final"))
   final <- merge(lookup, model, by.x = c("idx", "maxAbs"), by.y = c("idx", "abs"))
  
+  #todo remove dups, short-term only return the first from model if +1 are returned.
+  #add freq in the return
   final[, c("idx", "x")]
 }
 
@@ -164,6 +170,17 @@ model.tri <- createModel(tri.samp, 3)
 
 
 #backoff and smoothing
+
+stupidBackoff <- function(phrase){
+  tri <- trigram.model.samp[trigram.model.samp$idx == phrase, "x"]
+  bi <- bigram.model.samp.100000[bigram.model.samp.100000$idx == phrase, "x"]
+  ifelse (length(tri) > 0, tri, 
+          ifelse (length(bi) > 0, bi,
+                  #Implement POS tagger
+                  "the"
+                  )
+          )
+}
 
 #consider using unigrams from news dataset as a dictionary. combine that with a frequency threshold
 #so things like lol and omg (both high frequency) don't get filtered out. 
