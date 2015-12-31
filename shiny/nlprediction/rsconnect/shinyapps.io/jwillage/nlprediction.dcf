@@ -2,6 +2,8 @@ name: nlprediction
 account: jwillage
 server: shinyapps.io
 appId: 74176
-bundleId: 334044
+bundleId: 341479
 url: https://jwillage.shinyapps.io/nlprediction
-when: 1450367901.29258
+when: 1451600581.62729
+asMultiple: FALSE
+asStatic: FALSE

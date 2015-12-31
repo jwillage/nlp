@@ -9,3 +9,4 @@ Milestone.html
 Milestone_cache/
 model/
 ngram
+shiny/nlprediction/*RDS
