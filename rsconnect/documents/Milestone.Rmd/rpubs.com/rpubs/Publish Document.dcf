@@ -1,0 +1,7 @@
+name: Publish Document
+account: rpubs
+server: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/139284/c5ad7e32c0424066acfa13a516faddea
+bundleId: https://api.rpubs.com/api/v1/document/139284/c5ad7e32c0424066acfa13a516faddea
+url: http://rpubs.com/jwillage/139284
+when: 1451420409.10761

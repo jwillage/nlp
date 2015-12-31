@@ -1,6 +1,7 @@
 library(tm)
 library(Matrix)
 library(plyr)
+library(quanteda)
 
 fn <- "data/Coursera-SwiftKey.zip"
 download.file("https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
@@ -27,15 +28,6 @@ saveRDS(en, "data/readLines_list_all_EN.RDS")
 corp <- lapply(en, corpus)
 rm(en)
 
-
-trigram[["twitter"]] <- tokenize(toLower(corp[[1]]), removePunct = T, removeSeparators = T, 
-                                 concatenator = " ", ngrams = 3)
-trigram[["news"]] <- tokenize(toLower(corp[[2]]), removePunct = T, removeSeparators = T, 
-                              concatenator = " ", ngrams = 3)
-trigram[["blogs"]] <- tokenize(toLower(corp[[3]]), removePunct = T, removeSeparators = T, 
-                              concatenator = " ", ngrams = 3)
-saveRDS(trigram, "data/trigram_EN_new.RDS")
-
 #build n-grams
 unigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = T, removeSeparators = T, 
                                              concatenator = " ", ngrams = 1))
@@ -46,37 +38,31 @@ bigram.samp.100000 <- lapply(bigram, sample, 100000)
 trigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = T, removeSeparators = T, 
                                             concatenator = " ", ngrams = 3))
 trigram.samp.100000 <- lapply(trigram, sample, 100000)
-
-quadgram <- lapply(corp, function(x) tokenize(toLower(x), removeNumbers = T, removePunct = T, 
-                                              removeSeparators = T, ngrams = 3))
-quadgram <- list()
-system.time(twitter <- tokenize(toLower(corp[[1]]), removeNumbers = F, removePunct = T, 
-                                removeSeparators = T, ngrams = 4))
+quadgram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = T, removeSeparators = T, 
+                                concatenator = " ", ngrams = 4))
+quadgram.samp.100000 <- lapply(quadgram, sample, 100000)
+rm(corp)
 
 
 #handle twitter mentions. otherwise replace @ with "at"
 #twitter hashtag removal. just remove octothorpe if it at the end of a tweet, otherwise,  gaps
 
 createModel <- function(gram, n){
-  #assumes list of corpora
   print(paste(timestamp(quiet = T), "create model begin"))
-  gram <- lapply(gram, unlist)
+  gram <- unlist(gram)
   #rounding to 8 works for sample, may need to increase precision for larger corpora
   #ie length of samp[[1]] == 114293. 1/114293 = 8.7e-6. can round after that (keep 2 extra JICOC)
 
   #filter out apostrophes
   print(paste(timestamp(quiet = T), "filtering apostrophes"))
-  gram <- lapply(gram, function(x) gsub("'", "", unlist(x), fixed = T, perl = T))
+  gram <- gsub("'", "", unlist(gram), fixed = T, perl = T)
   #make sure rownames are not taking up space, else set to NULL
   
   print(paste(timestamp(quiet = T), "creating freq table"))
-  f<- lapply(gram, function(x) table(x))
-  rf <- lapply(gram, function(x) round(table(x)/length(x), 8))
-  tf <- list()
-  for(i in 1:length(rf)){
-    tf[[i]] <- as.data.frame(rf[[i]], row.names = NULL, stringsAsFactors = F)
-    tf[[i]]$abs <- f[[i]]
-  }
+  f<- table(gram)
+  rf <- round(table(gram)/length(gram), 8)
+  tf <- as.data.frame(rf, row.names = NULL, stringsAsFactors = F)
+  tf$abs <- f
   rm(f); rm(rf);
   
   print(paste(timestamp(quiet = T), "gram filtering"))
@@ -95,59 +81,43 @@ createModel <- function(gram, n){
   #remove grams with remaining special chars
   sw <- paste0(sw, "|_")
   
-  tf.s <- list()
-  for (i in 1:length(tf)){
-    #lapply did not work here
-    idx <- grep(sw, tf[[i]]$x, perl = TRUE)
-    if (length(idx) == 0) tf.s[[i]] <- tf[[i]]
-    if (length(idx) > 0) tf.s[[i]] <- tf[[i]][-idx, ]
-  }
+  idx <- grep(sw, tf$gram, perl = TRUE)
+  if (length(idx) == 0) tf.s <- tf
+  if (length(idx) > 0) tf.s <- tf[-idx, ]
   rm(tf);  rm(sw);
 
   #Indexing. For bigrams, only take [1] the first word to index
   #for n>2, need to combine 1 - n-1 into a single word index
-  for (i in 1:length(tf.s)){
-    print(paste(timestamp(quiet = T), "index unlisting"))
-    t <- unlist(lapply(strsplit(tf.s[[i]]$x, " "), function(x) x[1:n-1]))
-    print(paste(timestamp(quiet = T), "index subsetting"))
-    #needs to be on unlisted and 1 big blob of text
-    p <- t[seq(1, length(t), by = n - 1)]
-    #process additional grams if n > 2
-    print(paste(timestamp(quiet = T), "index additional grams"))
-    if (n > 2)  for(j in 2:(n - 1))  p <- paste(p, t[seq(j, length(t), by = n - 1)])
-    tf.s[[i]]$idx <- p
-  }
-  
+  print(paste(timestamp(quiet = T), "index unlisting"))
+  t <- unlist(lapply(strsplit(tf.s$gram, " "), function(x) x[1:n-1]))
+  print(paste(timestamp(quiet = T), "index subsetting"))
+  #needs to be on unlisted and 1 big blob of text
+  p <- t[seq(1, length(t), by = n - 1)]
+  #process additional grams if n > 2
+  print(paste(timestamp(quiet = T), "index additional grams"))
+  if (n > 2)  for(j in 2:(n - 1))  p <- paste(p, t[seq(j, length(t), by = n - 1)])
+  tf.s$idx <- p
+
   print(paste(timestamp(quiet = T), "lookup"))
   #only keep the most frequent ngram by index
-  lookup <- lapply(tf.s, function(x) setNames(aggregate(x$Freq, by = list(x$idx), max), 
-                                              c("idx", "Freq")))
+  lookup <- setNames(aggregate(tf.s$Freq, by = list(tf.s$idx), max), c("idx", "Freq"))
   #here look at filtering out grams with freq == 1
   
   print(paste(timestamp(quiet = T), "create model"))
-  model <- list()
-  for (i in 1:length(tf.s)){
-    print(paste(timestamp(quiet = T), "model merge"))
-    model[[i]] <- merge(lookup[[i]], tf.s[[i]])
-    #remove duplicate idx and freq, taking the first (alpha) occurance
-    #only take freq or rel freq in next step, depending on final implementation
-    print(paste(timestamp(quiet = T), "model remove dups"))
-    model[[i]] <- model[[i]][!duplicated(model[[i]]$idx), ]
-    #remove first n-1 grams and keep only the term to predict
-    print(paste(timestamp(quiet = T), "model unlisting"))
-    model[[i]]$x <- unlist(lapply(strsplit(model[[i]]$x, " "), function(x) unclass(x)[n]))
-  }
-  #sanity check, "i love" highest freq for index "i" in twitter
-  #tf[[1]][tf[[1]]$idx == "i", ][order(tf[[1]][tf[[1]]$idx == "i", "Freq"]), ]
-  #model.bi[[1]][model.bi[[1]]$idx == "i",]
+  model <- merge(lookup, tf.s)
+  #remove duplicate idx and freq, taking the first (alpha) occurance
+  #only take freq or rel freq in next step, depending on final implementation
+  print(paste(timestamp(quiet = T), "model remove dups"))
+  model <- model[!duplicated(model$idx), ]
+  #remove first n-1 grams and keep only the term to predict
+  print(paste(timestamp(quiet = T), "model unlisting"))
+  model$gram <- unlist(lapply(strsplit(model$gram, " "), function(x) unclass(x)[n]))
   rm(gram); rm(tf.s); rm(lookup)
   
-  #need to combine back into 1 and figure out how to deal with mismatching index combos. I think #1
-  #1. hang on to frequency count still. whoever has more observations wins
-  #use same process as when there multiple indexes before. combine into a single and lookup the max
-  #with this method we can combine earlier on in the model building
-  #2. whoever has higher RELATIVE freq wins
-  
+  model
+}
+ 
+combineModels <- function(model){
   print(paste(timestamp(quiet = T), "rbind list"))
   model <- rbind.fill(model)
   
@@ -157,32 +127,52 @@ createModel <- function(gram, n){
   print(paste(timestamp(quiet = T), "merge final"))
   final <- merge(lookup, model, by.x = c("idx", "maxAbs"), by.y = c("idx", "abs"))
  
-  #todo remove dups, short-term only return the first from model if +1 are returned.
+  print(paste(timestamp(quiet = T), "model remove dups"))
+  final <- final[!duplicated(final$idx), ]
+  
   #add freq in the return
-  final[, c("idx", "x")]
+  #final[, c("idx", "x")]
+  final
 }
 
-#TODO need unigram freq (to use for parts of speech)
 
-#Index n-grams/create model
-model.tri <- createModel(tri.samp, 3)
-
-
-
-#backoff and smoothing
+bigram.model.samp <- createModel(bigram.samp.100000, 2)
+trigram.model.samp <- createModel(trigram.samp.100000, 3)
+quad.model.samp <- createModel(quadgram.samp.100000, 4)
 
 stupidBackoff <- function(phrase){
-  tri <- trigram.model.samp[trigram.model.samp$idx == phrase, "x"]
-  bi <- bigram.model.samp.100000[bigram.model.samp.100000$idx == phrase, "x"]
-  ifelse (length(tri) > 0, tri, 
-          ifelse (length(bi) > 0, bi,
-                  #Implement POS tagger
-                  "the"
-                  )
-          )
+  phrase <- strsplit(phrase, " ")[[1]]
+  len <- length(phrase)
+  bi <- NULL; tri <- NULL; quad <- NULL;
+  #return gram AND frequency, to  weight and choose best results in more complex model
+  if (len >= 1) {
+    bi <- bigram.model.samp[bigram.model.samp$idx == 
+                              paste(phrase[len], collapse = " "), "gram"]
+    #return(bi)
+    }
+  if (len >= 2){
+    tri <- trigram.model.samp[trigram.model.samp$idx == 
+                                paste(phrase[(len - 1) : len], collapse = " "), "gram"]
+    #return(tri)
+    }
+  if (len >= 3){
+    quad <- quad.model.samp[quad.model.samp$idx == 
+                              paste(phrase[(len - 2) : len], collapse = " "), "gram"]
+    #return (quad)
+    }
+ 
+   ifelse (length(quad) > 0, quad, 
+     ifelse (length(tri) > 0, tri, 
+        ifelse (length(bi) > 0, bi,
+#                     #Implement POS tagger
+                     "the"
+    )))
 }
 
 #consider using unigrams from news dataset as a dictionary. combine that with a frequency threshold
-#so things like lol and omg (both high frequency) don't get filtered out. 
+#so things high frequency internet slang doesn't get filtered out. 
 
 #create test set and see model accuracy
+
+#todo consider data.tables or sqldf for faster search into models. 
+#need unigram freq (to use for parts of speech)
