@@ -144,29 +144,27 @@ stupidBackoff <- function(phrase){
   phrase <- strsplit(phrase, " ")[[1]]
   len <- length(phrase)
   bi <- NULL; tri <- NULL; quad <- NULL;
-  #return gram AND frequency, to  weight and choose best results in more complex model
-  if (len >= 1) {
+  if (len >= 1) 
     bi <- bigram.model.samp[bigram.model.samp$idx == 
-                              paste(phrase[len], collapse = " "), "gram"]
-    #return(bi)
-    }
-  if (len >= 2){
+                              paste(phrase[len], collapse = " "), ]
+  if (len >= 2)
     tri <- trigram.model.samp[trigram.model.samp$idx == 
-                                paste(phrase[(len - 1) : len], collapse = " "), "gram"]
-    #return(tri)
-    }
-  if (len >= 3){
+                                paste(phrase[(len - 1) : len], collapse = " "), ]
+  if (len >= 3)
     quad <- quad.model.samp[quad.model.samp$idx == 
-                              paste(phrase[(len - 2) : len], collapse = " "), "gram"]
-    #return (quad)
-    }
- 
-   ifelse (length(quad) > 0, quad, 
-     ifelse (length(tri) > 0, tri, 
-        ifelse (length(bi) > 0, bi,
-#                     #Implement POS tagger
-                     "the"
-    )))
+                              paste(phrase[(len - 2) : len], collapse = " "), ]
+  
+  ifelse (length(quad$gram) > 0, quad$gram, 
+          ifelse (length(tri$gram) > 0, tri$gram, 
+                  ifelse (length(bi$gram) > 0, bi$gram,
+                          #                     #Implement POS tagger
+                          "the"
+                  )))
+}
+
+cleanInput <- function(phrase){
+  gsub("'", "", tokenize(toLower(phrase), removePunct = T, removeSeparators = T, 
+           concatenator = " ", ngrams = 1)[[1]], fixed = T)
 }
 
 #consider using unigrams from news dataset as a dictionary. combine that with a frequency threshold

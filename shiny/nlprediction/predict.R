@@ -2,6 +2,12 @@ bigram.model.samp <- readRDS("model_bi_sample_100k_EN_new.RDS")
 trigram.model.samp <- readRDS("model_tri_sample_100k_EN_new.RDS")
 quad.model.samp <- readRDS("model_quad_sample_100k_EN_new.RDS")
 
+cleanInput <- function(phrase){
+  library(quanteda)
+  gsub("'", "", tokenize(toLower(phrase), removePunct = T, removeSeparators = T, 
+                         concatenator = " ", ngrams = 1)[[1]], fixed = T)
+}
+
 stupidBackoff <- function(phrase){
   phrase <- strsplit(phrase, " ")[[1]]
   len <- length(phrase)
