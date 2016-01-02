@@ -4,8 +4,8 @@ quad.model.samp <- readRDS("model_quad_sample_100k_EN_new.RDS")
 
 cleanInput <- function(phrase){
   library(quanteda)
-  gsub("'", "", tokenize(toLower(phrase), removePunct = T, removeSeparators = T, 
-                         concatenator = " ", ngrams = 1)[[1]], fixed = T)
+  paste(gsub("'", "", tokenize(toLower(phrase), removePunct = T, removeSeparators = T, 
+                         concatenator = " ", ngrams = 1)[[1]], fixed = T), collapse = " ")
 }
 
 stupidBackoff <- function(phrase){

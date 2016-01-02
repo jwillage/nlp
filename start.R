@@ -163,14 +163,16 @@ stupidBackoff <- function(phrase){
 }
 
 cleanInput <- function(phrase){
-  gsub("'", "", tokenize(toLower(phrase), removePunct = T, removeSeparators = T, 
-           concatenator = " ", ngrams = 1)[[1]], fixed = T)
+  paste(gsub("'", "", tokenize(toLower(phrase), removePunct = T, removeSeparators = T, 
+                               concatenator = " ", ngrams = 1)[[1]], fixed = T), collapse = " ")
 }
 
 #consider using unigrams from news dataset as a dictionary. combine that with a frequency threshold
 #so things high frequency internet slang doesn't get filtered out. 
 
+#convert @ to "at", other misc cleanup. 
+
 #create test set and see model accuracy
 
-#todo consider data.tables or sqldf for faster search into models. 
+#consider data.tables or sqldf for faster search into models. 
 #need unigram freq (to use for parts of speech)
