@@ -2,6 +2,7 @@ library(tm)
 library(Matrix)
 library(plyr)
 library(quanteda)
+library(jsonlite)
 
 fn <- "data/Coursera-SwiftKey.zip"
 download.file("https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
@@ -97,6 +98,8 @@ createModel <- function(gram, n){
   print(paste(timestamp(quiet = T), "index additional grams"))
   if (n > 2)  for(j in 2:(n - 1))  p <- paste(p, t[seq(j, length(t), by = n - 1)])
   tf.s$idx <- p
+  
+  #up to the above line can 
 
   print(paste(timestamp(quiet = T), "lookup"))
   #only keep the most frequent ngram by index
@@ -135,6 +138,10 @@ combineModels <- function(model){
   final
 }
 
+singleModel <- function(ngrams){
+  #takes a list of multiple ngrams and combines them before computing frequency
+  
+}
 
 bigram.model.samp <- createModel(bigram.samp.100000, 2)
 trigram.model.samp <- createModel(trigram.samp.100000, 3)
@@ -167,12 +174,44 @@ cleanInput <- function(phrase){
                                concatenator = " ", ngrams = 1)[[1]], fixed = T), collapse = " ")
 }
 
+#in sample test set
+r <- readRDS("data/readLines_list_all_EN.RDS")
+is <- unlist(lapply(r, sample, 1000))
+saveRDS(is, "data/test_3000.RDS")
+ist <- lapply(strsplit(is, ' '), function(x) paste(x[1 : (length(x)-1)], collapse = " "))
+isa <- sapply(strsplit(is, ' '), function(x) paste(x[length(x)], collapse = " "))
+isa <- tokenize(toLower(isa), removePunct = T, removeSeparators = T)
+
+#out of sample test set
+npr.text <- NULL
+for (i in 0:11){
+  url2 <- paste0("http://api.npr.org/query?id=1007,3&numResults=20&output=JSON&startNum=", (20*i)+1,
+                 "&apiKey=", readLines("test/npr.key"))
+  npr.json <- fromJSON(url2)
+  for (j in 1: length(npr.json$list$story$text$paragraph)){
+    if(nrow(npr.json$list$story$text$paragraph[[j]]) > 1){
+      u <- unclass(npr.json$list$story$text$paragraph[[j]]$`$text`)
+      npr.text [[220 + j]] <- u[1:(length(u) -1)]
+    }
+  }
+}
+npr.text <- unlist(npr.text)[1:3000]
+npr.text <- npr.text[-correct] #filter out initial run of 30 matches which were badly formed lines
+ost <- lapply(strsplit(npr.text, ' '), function(x) paste(x[1 : (length(x)-1)], collapse = " "))
+osa <- sapply(strsplit(npr.text, ' '), function(x) paste(x[length(x)], collapse = " "))
+osa <- tokenize(toLower(osa), removePunct = T, removeSeparators = T)
+
+#predict and compare
+pred <- lapply(ist, stupidBackoff)
+comp <- NULL
+for(i in 1 : length(pred))  comp <- rbind(comp, c(isa[[i]], pred[[i]]))
+c(paste0(sum(comp[,1] == comp[,2]), "/", nrow(comp)), 
+  paste0(round(sum(comp[,1] == comp[,2])/nrow(comp)*100, 4), "%"))
+
 #consider using unigrams from news dataset as a dictionary. combine that with a frequency threshold
 #so things high frequency internet slang doesn't get filtered out. 
 
-#convert @ to "at", other misc cleanup. 
-
-#create test set and see model accuracy
+#convert @ to "at", other misc cleanup, ie "**text**
 
 #consider data.tables or sqldf for faster search into models. 
 #need unigram freq (to use for parts of speech)
