@@ -52,13 +52,13 @@ pred.oos <- lapply(ost, stupidBackoff)
 #for(i in 1 : length(pred))  comp <- rbind(comp, c(isa[[i]], pred[[i]]))
 #read from pre-computed
 comp <- readRDS("test/compare_3000_stupid_backoff.RDS")
-comp.oos <- readRDS("test/compare_2970_stupid_backoff.RDS")
+comp.oos <- readRDS("test/compare_3000_stupid_backoff_OOS.RDS")
 ```
 
 Test Set     Correct Tests Percent   # "the"
 --------     ------- ----- -------   -----------
-In-sample    415     3000    13.8333   1133
-Out-of-sample413     2970    13.9057   1129
+In-sample    593     3000    19.7667   414
+Out-of-sample321     3000    10.7     388
 
 
 Model 2 also utilizes the basic non-parameterized backoff approach. The difference here is how the
@@ -80,16 +80,17 @@ pred2oos <- lapply(ost, stupidBackoff)
 #for(i in 1 : length(pred))  comp <- rbind(comp, c(isa[[i]], pred2[[i]]))
 #read from pre-computed
 comp2 <- readRDS("test/compare_3000_stupid_backoff_single.RDS")
-comp2oos <- readRDS("test/compare_2970_stupid_backoff_single_OOS.RDS")
+comp2oos <- readRDS("test/compare_3000_stupid_backoff_single_OOS.RDS")
 ```
 
 Test Set     Correct Tests Percent   # "the"
 --------     ------- ----- -------   -----------
-In-sample    415     3000    13.8333   1133
-Out-of-sample413     2970    13.9057   1129
+In-sample    589     3000    19.6333   429
+Out-of-sample341     3000    11.3667   403
 
 
 We see identical performance between models 1 and 2. We will utilize model 2 going forward since it
 is less computationally costly. Also note the in-sample and OOS rates are nearly identical, with the
-OOS performing a little worse, as should be expected. 
+OOS performing a little worse, as should be expected. However when closely inspecting the npr set,
+we are still left with poorly formed sentences that include emojis and 
 

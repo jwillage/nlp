@@ -53,14 +53,16 @@ pred.oos <- lapply(ost, stupidBackoff)
 #for(i in 1 : length(pred))  comp <- rbind(comp, c(isa[[i]], pred[[i]]))
 #read from pre-computed
 comp <- readRDS("test/compare_3000_stupid_backoff.RDS")
-comp.oos <- readRDS("test/compare_2970_stupid_backoff.RDS")
+comp.oos <- readRDS("test/compare_3000_stupid_backoff_OOS.RDS")
 ```
 
 Test Set     Correct Tests Percent   # "the"
 --------     ------- ----- -------   -----------
 In-sample    `r sum(comp[,1] == comp[,2])`     `r nrow(comp)`    `r round(sum(comp[,1] == comp[,2])/nrow(comp)*100, 4)`   `r sum(comp[,2] == "the")`
-Out-of-sample`r sum(comp.oos[,1] == comp.oos[,2])`     `r nrow(comp.oos)`    `r round(sum(comp.oos[,1] == comp.oos[,2])/nrow(comp.oos)*100, 4)`   `r sum(comp.oos[,2] == "the")`
+Out-of-sample`r sum(comp.oos[,1] == comp.oos[,2])`     `r nrow(comp.oos)`    `r round(sum(comp.oos[,1] == comp.oos[,2])/nrow(comp.oos)*100, 4)`     `r sum(comp.oos[,2] == "the")`
 
+This initial model gives us an in-sample accuracy rate of close to 20%. As expected, the OOS rate is 
+lower.
 
 Model 2 also utilizes the basic non-parameterized backoff approach. The difference here is how the
 *n*-gram models are created. Model 2 combines all the corpora and then calculates maximum
@@ -81,7 +83,7 @@ pred2oos <- lapply(ost, stupidBackoff)
 #for(i in 1 : length(pred))  comp <- rbind(comp, c(isa[[i]], pred2[[i]]))
 #read from pre-computed
 comp2 <- readRDS("test/compare_3000_stupid_backoff_single.RDS")
-comp2oos <- readRDS("test/compare_2970_stupid_backoff_single_OOS.RDS")
+comp2oos <- readRDS("test/compare_3000_stupid_backoff_single_OOS.RDS")
 ```
 
 Test Set     Correct Tests Percent   # "the"
@@ -90,7 +92,5 @@ In-sample    `r sum(comp2[,1] == comp2[,2])`     `r nrow(comp2)`    `r round(sum
 Out-of-sample`r sum(comp2oos[,1] == comp2oos[,2])`     `r nrow(comp2oos)`    `r round(sum(comp2oos[,1] == comp2oos[,2])/nrow(comp2oos)*100, 4)`   `r sum(comp2oos[,2] == "the")`
 
 
-We see identical performance between models 1 and 2. We will utilize model 2 going forward since it
-is less computationally costly. Also note the in-sample and OOS rates are nearly identical, with the
-OOS performing a little worse, as should be expected. 
-
+The in-sample accuracy is about the same as model 1, but the OOS accuracy jumps up from that model. 
+We are also predicting more "the"s, but hopefull this will be fixed when we implement POS tagging. 

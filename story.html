@@ -93,7 +93,7 @@ pred.oos &lt;- lapply(ost, stupidBackoff)</code></pre>
 <pre class="r"><code>#for(i in 1 : length(pred))  comp &lt;- rbind(comp, c(isa[[i]], pred[[i]]))
 #read from pre-computed
 comp &lt;- readRDS(&quot;test/compare_3000_stupid_backoff.RDS&quot;)
-comp.oos &lt;- readRDS(&quot;test/compare_2970_stupid_backoff.RDS&quot;)</code></pre>
+comp.oos &lt;- readRDS(&quot;test/compare_3000_stupid_backoff_OOS.RDS&quot;)</code></pre>
 <table>
 <thead>
 <tr class="header">
@@ -107,17 +107,17 @@ comp.oos &lt;- readRDS(&quot;test/compare_2970_stupid_backoff.RDS&quot;)</code><
 <tbody>
 <tr class="odd">
 <td align="left">In-sample</td>
-<td align="left">415</td>
+<td align="left">593</td>
 <td align="left">3000</td>
-<td align="left">13.8333</td>
-<td align="left">1133</td>
+<td align="left">19.7667</td>
+<td align="left">414</td>
 </tr>
 <tr class="even">
 <td align="left">Out-of-sample</td>
-<td align="left">413</td>
-<td align="left">2970</td>
-<td align="left">13.9057</td>
-<td align="left">1129</td>
+<td align="left">321</td>
+<td align="left">3000</td>
+<td align="left">10.7</td>
+<td align="left">388</td>
 </tr>
 </tbody>
 </table>
@@ -128,7 +128,7 @@ pred2oos &lt;- lapply(ost, stupidBackoff)</code></pre>
 <pre class="r"><code>#for(i in 1 : length(pred))  comp &lt;- rbind(comp, c(isa[[i]], pred2[[i]]))
 #read from pre-computed
 comp2 &lt;- readRDS(&quot;test/compare_3000_stupid_backoff_single.RDS&quot;)
-comp2oos &lt;- readRDS(&quot;test/compare_2970_stupid_backoff_single_OOS.RDS&quot;)</code></pre>
+comp2oos &lt;- readRDS(&quot;test/compare_3000_stupid_backoff_single_OOS.RDS&quot;)</code></pre>
 <table>
 <thead>
 <tr class="header">
@@ -142,21 +142,21 @@ comp2oos &lt;- readRDS(&quot;test/compare_2970_stupid_backoff_single_OOS.RDS&quo
 <tbody>
 <tr class="odd">
 <td align="left">In-sample</td>
-<td align="left">415</td>
+<td align="left">589</td>
 <td align="left">3000</td>
-<td align="left">13.8333</td>
-<td align="left">1133</td>
+<td align="left">19.6333</td>
+<td align="left">429</td>
 </tr>
 <tr class="even">
 <td align="left">Out-of-sample</td>
-<td align="left">413</td>
-<td align="left">2970</td>
-<td align="left">13.9057</td>
-<td align="left">1129</td>
+<td align="left">341</td>
+<td align="left">3000</td>
+<td align="left">11.3667</td>
+<td align="left">403</td>
 </tr>
 </tbody>
 </table>
-<p>We see identical performance between models 1 and 2. We will utilize model 2 going forward since it is less computationally costly. Also note the in-sample and OOS rates are nearly identical, with the OOS performing a little worse, as should be expected.</p>
+<p>We see identical performance between models 1 and 2. We will utilize model 2 going forward since it is less computationally costly. Also note the in-sample and OOS rates are nearly identical, with the OOS performing a little worse, as should be expected. However when closely inspecting the npr set, we are still left with poorly formed sentences that include emojis and</p>
 
 
 </div>
