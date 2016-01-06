@@ -6,6 +6,6 @@ shinyServer(
     frag <- renderText({input$fragment})
     #strip punctuation from input and covert to lower
     output$pred <- renderPrint(paste({input$fragment}, 
-                                     stupidBackoff(cleanInput(input$fragment))))
+                                     stupidBackoff(cleanInput(input$fragment))[1]))
   }
 )

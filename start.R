@@ -161,11 +161,33 @@ stupidBackoff <- function(phrase){
     quad <- quad.model.samp[quad.model.samp$idx == 
                               paste(phrase[(len - 2) : len], collapse = " "), ]
   
-  ifelse (length(quad$gram) > 0, quad$gram, 
-          ifelse (length(tri$gram) > 0, tri$gram, 
-                  ifelse (length(bi$gram) > 0, bi$gram,
+  ifelse (c(length(quad$gram) > 0, length(quad$gram) > 0), c(quad$gram, 4), 
+          ifelse (c(length(tri$gram) > 0, length(tri$gram) > 0), c(tri$gram, 3), 
+                  ifelse (c(length(bi$gram) > 0, length(bi$gram) > 0), c(bi$gram, 2),
                           #                     #Implement POS tagger
-                          "the"
+                          c("the", 1)
+                  )))
+}
+
+stupidBackoffCombined <- function(phrase){
+  phrase <- strsplit(phrase, " ")[[1]]
+  len <- length(phrase)
+  bi <- NULL; tri <- NULL; quad <- NULL;
+  if (len >= 1) 
+    bi <- bigram.model.sing[bigram.model.sing$idx == 
+                              paste(phrase[len], collapse = " "), ]
+  if (len >= 2)
+    tri <- trigram.model.sing[trigram.model.sing$idx == 
+                                paste(phrase[(len - 1) : len], collapse = " "), ]
+  if (len >= 3)
+    quad <- quadgram.model.sing[quadgram.model.sing$idx == 
+                                  paste(phrase[(len - 2) : len], collapse = " "), ]
+  
+  ifelse (c(length(quad$gram) > 0, length(quad$gram) > 0), c(quad$gram, 4), 
+          ifelse (c(length(tri$gram) > 0, length(tri$gram) > 0), c(tri$gram, 3), 
+                  ifelse (c(length(bi$gram) > 0, length(bi$gram) > 0), c(bi$gram, 2),
+                          #                     #Implement POS tagger
+                          c("the", 1)
                   )))
 }
 
@@ -196,22 +218,56 @@ for (i in 0:11){
   }
 }
 npr.text <- unlist(npr.text)[1:3000]
-npr.text <- npr.text[-correct] #filter out initial run of 30 matches which were badly formed lines
 ost <- lapply(strsplit(npr.text, ' '), function(x) paste(x[1 : (length(x)-1)], collapse = " "))
 osa <- sapply(strsplit(npr.text, ' '), function(x) paste(x[length(x)], collapse = " "))
 osa <- tokenize(toLower(osa), removePunct = T, removeSeparators = T)
 
 #predict and compare
-pred <- lapply(ist, stupidBackoff)
+pred <- lapply(ist.10, stupidBackoff)
 comp <- NULL
-for(i in 1 : length(pred))  comp <- rbind(comp, c(isa[[i]], pred[[i]]))
-c(paste0(sum(comp[,1] == comp[,2]), "/", nrow(comp)), 
-  paste0(round(sum(comp[,1] == comp[,2])/nrow(comp)*100, 4), "%"))
+for(i in 1 : length(pred2))  
+  comp2 <- rbind(comp2, c(ifelse(length(isa[[i]] > 0), isa[[i]], "<NA>"), pred2[[i]]))
+
+NAs <- sum(comp.oos[,1] == "<NA>")
+len <- nrow(comp.oos) - NAs
+c(paste0(sum(comp.oos[,1] == comp.oos[,2]), "/", len), 
+  paste0(round(sum(comp.oos[,1] == comp.oos[,2])/len*100, 4), "%"))
+
+#mini samples
+ost.1000 <- head(ost, 1000)
+osa.1000 <- head(osa, 1000)
+for (i in 1:length(osa.1000)) if(length(osa.1000[[i]]) == 0) osa.1000[[i]] = "<NA>"
+pred.1000 <- lapply(ost.1000, function(x) 
+  stupidBackoff(cleanInput(x), bigram.model.sing, trigram.model.sing, quadgram.model.sing))
+pred.a1 <- lapply(ost.1000, function(x) 
+  stupidBackoff(cleanInput(x), bigram.model.sing, trigram.model.sing, A1))
+comp.a1 <- NULL
+for(i in 1 : length(pred.a1)) comp.a1 <- rbind(comp.a1, c(osa.1000[[i]], pred.a1[[i]]))
+pred.a2 <- lapply(ost.1000, function(x) 
+  stupidBackoff(cleanInput(x), bigram.model.sing, trigram.model.sing, A2))
+comp.a2 <- NULL
+for(i in 1 : length(pred.a2)) comp.a2 <- rbind(comp.a2, c(osa.1000[[i]], pred.a2[[i]]))
+pred.b1 <- lapply(ost.1000, function(x) 
+  stupidBackoff(cleanInput(x), bigram.model.sing, B1, quadgram.model.sing))
+comp.b1 <- NULL
+for(i in 1 : length(pred.b1)) comp.b1 <- rbind(comp.b1, c(osa.1000[[i]], pred.b1[[i]]))
+pred.b2 <- lapply(ost.1000, function(x) 
+  stupidBackoff(cleanInput(x), bigram.model.sing, B2, quadgram.model.sing))
+comp.b2 <- NULL
+for(i in 1 : length(pred.b1)) comp.b2 <- rbind(comp.b2, c(osa.1000[[i]], pred.b1[[i]]))
+pred.c1 <- lapply(ost.1000, function(x) 
+  stupidBackoff(cleanInput(x), C1, trigram.model.sing, quadgram.model.sing))
+comp.c1 <- NULL
+for(i in 1 : length(pred.c1)) comp.c1 <- rbind(comp.c1, c(osa.1000[[i]], pred.c1[[i]]))
+
+
+c(paste0(sum(comp.a1[,1] == comp.a1[,2]), "/", len), 
+  paste0(round(sum(comp.a1[,1] == comp.a1[,2])/len*100, 4), "%"))
 
 #consider using unigrams from news dataset as a dictionary. combine that with a frequency threshold
 #so things high frequency internet slang doesn't get filtered out. 
 
 #convert @ to "at", other misc cleanup, ie "**text**
 
-#consider data.tables or sqldf for faster search into models. 
 #need unigram freq (to use for parts of speech)
+

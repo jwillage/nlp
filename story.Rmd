@@ -31,7 +31,6 @@ for (i in 0:11){
   }
 }
 npr.text <- unlist(npr.text)[1:3000]
-npr.text <- npr.text[-correct] #filter out initial run of 30 matches which were badly formed lines
 ost <- lapply(strsplit(npr.text, ' '), function(x) paste(x[1 : (length(x)-1)], collapse = " "))
 osa <- sapply(strsplit(npr.text, ' '), function(x) paste(x[length(x)], collapse = " "))
 osa <- tokenize(toLower(osa), removePunct = T, removeSeparators = T)
@@ -54,12 +53,14 @@ pred.oos <- lapply(ost, stupidBackoff)
 #read from pre-computed
 comp <- readRDS("test/compare_3000_stupid_backoff.RDS")
 comp.oos <- readRDS("test/compare_3000_stupid_backoff_OOS.RDS")
+NAs <- sum(comp.oos[,1] == "<NA>")
+len <- nrow(comp.oos) - NAs
 ```
 
 Test Set     Correct Tests Percent   # "the"
 --------     ------- ----- -------   -----------
 In-sample    `r sum(comp[,1] == comp[,2])`     `r nrow(comp)`    `r round(sum(comp[,1] == comp[,2])/nrow(comp)*100, 4)`   `r sum(comp[,2] == "the")`
-Out-of-sample`r sum(comp.oos[,1] == comp.oos[,2])`     `r nrow(comp.oos)`    `r round(sum(comp.oos[,1] == comp.oos[,2])/nrow(comp.oos)*100, 4)`     `r sum(comp.oos[,2] == "the")`
+Out-of-sample`r sum(comp.oos[,1] == comp.oos[,2])`     `r len`    `r round(sum(comp.oos[,1] == comp.oos[,2])/len*100, 4)`     `r sum(comp.oos[,2] == "the")`
 
 This initial model gives us an in-sample accuracy rate of close to 20%. As expected, the OOS rate is 
 lower.
@@ -89,8 +90,55 @@ comp2oos <- readRDS("test/compare_3000_stupid_backoff_single_OOS.RDS")
 Test Set     Correct Tests Percent   # "the"
 --------     ------- ----- -------   -----------
 In-sample    `r sum(comp2[,1] == comp2[,2])`     `r nrow(comp2)`    `r round(sum(comp2[,1] == comp2[,2])/nrow(comp2)*100, 4)`   `r sum(comp2[,2] == "the")`
-Out-of-sample`r sum(comp2oos[,1] == comp2oos[,2])`     `r nrow(comp2oos)`    `r round(sum(comp2oos[,1] == comp2oos[,2])/nrow(comp2oos)*100, 4)`   `r sum(comp2oos[,2] == "the")`
+Out-of-sample`r sum(comp2oos[,1] == comp2oos[,2])`     `r len`    `r round(sum(comp2oos[,1] == comp2oos[,2])/len*100, 4)`   `r sum(comp2oos[,2] == "the")`
 
 
 The in-sample accuracy is about the same as model 1, but the OOS accuracy jumps up from that model. 
 We are also predicting more "the"s, but hopefull this will be fixed when we implement POS tagging. 
+We'll be using this "combined" model 2 as the one to improve upon going forward. We'll also focus
+more on the out of sample tests (of course over time those will also become in-sample, so we'll 
+need a validation set at the very end to give us a good approximation of our accuracy). We'll begin
+looking at how different parameteres effect the accuracy and also what order model is selected. 
+Let's see how model 2 OOS did with regards to model hits:
+
+```{r model hits}
+rbind(table(comp2oos[,3]) ,append(0, table(comp2oos[comp2oos[,1]==comp2oos[,2], 3])))
+```
+
+Most of our hits came from the 4-gram model, with unigram "the" predicting correctly 0 times.
+
+Model 3 builds on the combined approach in model 2 but trims back the *n*-gram models. We elminiate 
+*n*-grams that are only seen rarely. This is dual purpose: first it reduces the size of our models;
+second it may eliminate bias in the training data. We'll implement an approach similar to ANOVA, 
+adjusting the frequency cutoff for a single  *n*-gram model at a time. If the adjustment improves the model, we adjust further. When no more accuracy is gained, we backoff to the next lower model.
+Disclaimer: This is tricky since the optimal cutoffs may not appear in the order which we implement the testing. But testing every variation would require us to create models and perform $k^n$ tests, where $n$ = the
+number of *n*-gram models (4) and $k$ = the number of parameters to test (cutoff values, say $k = 5 (0:4)$)
+
+```{r}
+comp.1000 <- readRDS("test/compare_1000_baseline.RDS")
+NAs.1000 <- sum(comp.1000[,1] == "<NA>"); len.1000 <- nrow(comp.1000) - NAs.1000
+comp.a1 <- readRDS("test/compare_1000_a1.RDS")
+comp.a2 <- readRDS("test/compare_1000_a2.RDS")
+comp.b1 <- readRDS("test/compare_1000_b1.RDS")
+comp.b2 <- readRDS("test/compare_1000_b2.RDS")
+comp.c1 <- readRDS("test/compare_1000_c1.RDS")
+```
+
+The following models were tested on a subset of 1000 out of sample tests:  
+
+Baseline) No cutoffs: `r paste0(round(sum(comp.1000[,1] == comp.1000[,2])/len.1000*100, 2), "%")`  
+A1) Unlimited unigrams; unlimited bigrams; unlimited trigrams; > 1 4-gram :
+`r paste0(round(sum(comp.a1[,1] == comp.a1[,2])/len.1000*100, 2), "%")`  
+A2) Unlimited unigrams; unlimited bigrams; unlimited trigrams; > 3 4-gram :
+`r paste0(round(sum(comp.a2[,1] == comp.a2[,2])/len.1000*100, 2), "%")`  
+B1) Unlimited unigrams; unlimited bigrams; > 1 trigram; optimal A 4-gram :
+`r paste0(round(sum(comp.b1[,1] == comp.b1[,2])/len.1000*100, 2), "%")`  
+B2) Unlimited unigrams; unlimited bigrams; > 3 trigram; optimal A 4-gram :
+`r paste0(round(sum(comp.b2[,1] == comp.b2[,2])/len.1000*100, 2), "%")`  
+C1) Unlimited unigrams; unlimited bigrams; > 1 trigram; optimal A 4-gram :
+`r paste0(round(sum(comp.c1[,1] == comp.c1[,2])/len.1000*100, 2), "%")`  
+
+So adding frequency cutoffs did not help at all. The next thing we'll try is implementing POS 
+tagging to get us a better unigram accuracy. Improving this score may also improve C1 and models 
+that fall bcak to unigrams.
+
