@@ -99,8 +99,6 @@ createModel <- function(gram, n){
   if (n > 2)  for(j in 2:(n - 1))  p <- paste(p, t[seq(j, length(t), by = n - 1)])
   tf.s$idx <- p
   
-  #up to the above line can 
-
   print(paste(timestamp(quiet = T), "lookup"))
   #only keep the most frequent ngram by index
   lookup <- setNames(aggregate(tf.s$Freq, by = list(tf.s$idx), max), c("idx", "Freq"))
@@ -223,15 +221,15 @@ osa <- sapply(strsplit(npr.text, ' '), function(x) paste(x[length(x)], collapse 
 osa <- tokenize(toLower(osa), removePunct = T, removeSeparators = T)
 
 #predict and compare
-pred <- lapply(ist.10, stupidBackoff)
+pred <- lapply(ost, function(x) stupidBackoff(cleanInput(x)))
 comp <- NULL
-for(i in 1 : length(pred2))  
-  comp2 <- rbind(comp2, c(ifelse(length(isa[[i]] > 0), isa[[i]], "<NA>"), pred2[[i]]))
+for(i in 1 : length(pred))  
+  comp <- rbind(comp, c(ifelse(length(osa[[i]] > 0), osa[[i]], "<NA>"), pred[[i]]))
 
-NAs <- sum(comp.oos[,1] == "<NA>")
-len <- nrow(comp.oos) - NAs
-c(paste0(sum(comp.oos[,1] == comp.oos[,2]), "/", len), 
-  paste0(round(sum(comp.oos[,1] == comp.oos[,2])/len*100, 4), "%"))
+NAs <- sum(comp[,1] == "<NA>")
+len <- nrow(comp) - NAs
+c(paste0(sum(comp[,1] == comp[,2]), "/", len), 
+  paste0(round(sum(comp[,1] == comp[,2])/len*100, 4), "%"))
 
 #mini samples
 ost.1000 <- head(ost, 1000)
@@ -241,33 +239,35 @@ pred.1000 <- lapply(ost.1000, function(x)
   stupidBackoff(cleanInput(x), bigram.model.sing, trigram.model.sing, quadgram.model.sing))
 pred.a1 <- lapply(ost.1000, function(x) 
   stupidBackoff(cleanInput(x), bigram.model.sing, trigram.model.sing, A1))
-comp.a1 <- NULL
-for(i in 1 : length(pred.a1)) comp.a1 <- rbind(comp.a1, c(osa.1000[[i]], pred.a1[[i]]))
-pred.a2 <- lapply(ost.1000, function(x) 
-  stupidBackoff(cleanInput(x), bigram.model.sing, trigram.model.sing, A2))
-comp.a2 <- NULL
-for(i in 1 : length(pred.a2)) comp.a2 <- rbind(comp.a2, c(osa.1000[[i]], pred.a2[[i]]))
-pred.b1 <- lapply(ost.1000, function(x) 
-  stupidBackoff(cleanInput(x), bigram.model.sing, B1, quadgram.model.sing))
-comp.b1 <- NULL
-for(i in 1 : length(pred.b1)) comp.b1 <- rbind(comp.b1, c(osa.1000[[i]], pred.b1[[i]]))
-pred.b2 <- lapply(ost.1000, function(x) 
-  stupidBackoff(cleanInput(x), bigram.model.sing, B2, quadgram.model.sing))
-comp.b2 <- NULL
-for(i in 1 : length(pred.b1)) comp.b2 <- rbind(comp.b2, c(osa.1000[[i]], pred.b1[[i]]))
-pred.c1 <- lapply(ost.1000, function(x) 
-  stupidBackoff(cleanInput(x), C1, trigram.model.sing, quadgram.model.sing))
-comp.c1 <- NULL
-for(i in 1 : length(pred.c1)) comp.c1 <- rbind(comp.c1, c(osa.1000[[i]], pred.c1[[i]]))
-
+#etc
 
 c(paste0(sum(comp.a1[,1] == comp.a1[,2]), "/", len), 
   paste0(round(sum(comp.a1[,1] == comp.a1[,2])/len*100, 4), "%"))
 
+
+#POS tagging and MLE
+l <- NULL
+for (i in 1:19){
+  print(i)
+  s <- tf.s$idx[(i*100000): (i * 100000 + 99999)]
+  print(system.time(y1 <- annotate(s, list(sent_token_annotator, word_token_annotator))))
+  print(system.time(y2 <- annotate(s, pos_tag_annotator, y1)))
+  l[[i+1]] <- y2
+}
+
+tf.sub$pos <- l; tf.sub$pred <- unlist(lapply(strsplit(tf.sub$gram, " "), function(x) x[2]))
+lookup <- aggregate(tf.sub$abs, by = list(tf.sub$pos, tf.sub$pred), sum)
+c <- aggregate(lookup$x, by = list(lookup$Group.1), max)
+pos <- merge(lookup, c)
+pos <- pos[!duplicated(pos$Group.1), c("Group.1", "Group.2")]
+names(pos) <- c("pos", "pred")
+
+#converting to lower changes NNP to NN
+
 #consider using unigrams from news dataset as a dictionary. combine that with a frequency threshold
 #so things high frequency internet slang doesn't get filtered out. 
+#OOV: report back for the tests that were correct, what is the frequency of the gram? 
+#want to elminiate low freq words with <unk>
 
 #convert @ to "at", other misc cleanup, ie "**text**
-
-#need unigram freq (to use for parts of speech)
 

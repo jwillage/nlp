@@ -102,23 +102,23 @@ len &lt;- nrow(comp.oos) - NAs</code></pre>
 <th align="left">Correct</th>
 <th align="left">Tests</th>
 <th align="left">Percent</th>
-<th align="left"># “the”</th>
+<th align="left"># Unigram predictions</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td align="left">In-sample</td>
-<td align="left">593</td>
+<td align="left">467</td>
 <td align="left">3000</td>
-<td align="left">19.7667</td>
-<td align="left">414</td>
+<td align="left">15.5667</td>
+<td align="left"></td>
 </tr>
 <tr class="even">
 <td align="left">Out-of-sample</td>
 <td align="left">293</td>
 <td align="left">2972</td>
 <td align="left">9.8587</td>
-<td align="left">388</td>
+<td align="left"></td>
 </tr>
 </tbody>
 </table>
@@ -138,23 +138,23 @@ comp2oos &lt;- readRDS(&quot;test/compare_3000_stupid_backoff_single_OOS.RDS&quo
 <th align="left">Correct</th>
 <th align="left">Tests</th>
 <th align="left">Percent</th>
-<th align="left"># “the”</th>
+<th align="left"># Unigram predictions</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td align="left">In-sample</td>
-<td align="left">589</td>
+<td align="left">463</td>
 <td align="left">3000</td>
-<td align="left">19.6333</td>
-<td align="left">429</td>
+<td align="left">15.4333</td>
+<td align="left"></td>
 </tr>
 <tr class="even">
 <td align="left">Out-of-sample</td>
 <td align="left">313</td>
 <td align="left">2972</td>
 <td align="left">10.5316</td>
-<td align="left">403</td>
+<td align="left">124</td>
 </tr>
 </tbody>
 </table>
@@ -173,8 +173,40 @@ comp.b1 &lt;- readRDS(&quot;test/compare_1000_b1.RDS&quot;)
 comp.b2 &lt;- readRDS(&quot;test/compare_1000_b2.RDS&quot;)
 comp.c1 &lt;- readRDS(&quot;test/compare_1000_c1.RDS&quot;)</code></pre>
 <p>The following models were tested on a subset of 1000 out of sample tests:</p>
-<p>Baseline) No cutoffs: 10.26%<br />A1) Unlimited unigrams; unlimited bigrams; unlimited trigrams; &gt; 1 4-gram : 9.56%<br />A2) Unlimited unigrams; unlimited bigrams; unlimited trigrams; &gt; 3 4-gram : 9.15%<br />B1) Unlimited unigrams; unlimited bigrams; &gt; 1 trigram; optimal A 4-gram : 9.76%<br />B2) Unlimited unigrams; unlimited bigrams; &gt; 3 trigram; optimal A 4-gram : 9.05%<br />C1) Unlimited unigrams; unlimited bigrams; &gt; 1 trigram; optimal A 4-gram : 10.26%</p>
+<p>Baseline) No cutoffs: 10.26%<br />A1) Unlimited unigrams; unlimited bigrams; unlimited trigrams; &gt; 1 4-gram : 9.56%<br />A2) Unlimited unigrams; unlimited bigrams; unlimited trigrams; &gt; 3 4-gram : 9.15%<br />B1) Unlimited unigrams; unlimited bigrams; &gt; 1 trigram; optimal A 4-gram : 9.76%<br />B2) Unlimited unigrams; unlimited bigrams; &gt; 3 trigram; optimal A 4-gram : 9.05%<br />C1) Unlimited unigrams; &gt; 1 bigram; &gt; optimal B trigram; optimal A 4-gram : 10.26%</p>
 <p>So adding frequency cutoffs did not help at all. The next thing we’ll try is implementing POS tagging to get us a better unigram accuracy. Improving this score may also improve C1 and models that fall bcak to unigrams.</p>
+<p>Model 4 includes the POS lookup table. This consists of 32 different parts-of-speech and their most likely next word, according to our training data.</p>
+<pre class="r"><code>comp.pos.is &lt;- readRDS(&quot;test/compare_3000_stupid_backoff_single_POS.RDS&quot;)
+comp.pos &lt;- readRDS(&quot;test/compare_3000_stupid_backoff_single_OOS_POS.RDS&quot;)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Test Set</th>
+<th align="left">Correct</th>
+<th align="left">Tests</th>
+<th align="left">Percent</th>
+<th align="left"># Unigram predictions</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">In-sample</td>
+<td align="left">466</td>
+<td align="left">2972</td>
+<td align="left">15.6797</td>
+<td align="left">190</td>
+</tr>
+<tr class="even">
+<td align="left">Out-of-sample</td>
+<td align="left">313</td>
+<td align="left">2972</td>
+<td align="left">10.5316</td>
+<td align="left">124</td>
+</tr>
+</tbody>
+</table>
+<p>Unfortunately we get the same perform with POS prediction. Further inspection shows the most likely response for phrases that had to fall back to uni-gram is “says” with a value of 55. Inspection of the test set shows that almost all of these cases were preceded with a proper noun, ie “Kate says”. However, when the input is cleaned before going through the prediciton model, it is converted to lowercase, among other things. This leaves the phrase “kate” which is tagged as a noun instead of a proper noun. However, even if the input cleanup was not an issue, the POS model was trained on data that went through a similar cleaning process. So there would not be many proper nouns in that training set. The POS model currently predicts “they” for proper nouns. Training on raw data may result in a more accurate model that maybe predicts “says”. It’s also worth pointing out that the test data is from NPR articles which includes quotes and attributations for those quotes. In practice, this may not be a true representation of input. The in-sample rows have “says” only once.</p>
+<p>We can manually override the POS model by replacing “they” with “says” for proper nouns, etc. I actually wouldn’t consider this “manual”, but a different method that can be automated: learning based on actual data, ML. The original POS model failed because it was predicting the most likely word given a POS for the prior word, which came from the training data. In actual use, the prior word is not from the training data (if it was in the training data we could predict a proper bigram), but it is unseen, and hence the POS prediction model. Given more time, we could re-train on unseen words.</p>
 
 
 </div>

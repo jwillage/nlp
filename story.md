@@ -56,10 +56,10 @@ NAs <- sum(comp.oos[,1] == "<NA>")
 len <- nrow(comp.oos) - NAs
 ```
 
-Test Set     Correct Tests Percent   # "the"
+Test Set     Correct Tests Percent   # Unigram predictions
 --------     ------- ----- -------   -----------
-In-sample    593     3000    19.7667   414
-Out-of-sample293     2972    9.8587     388
+In-sample    467     3000    15.5667   
+Out-of-sample293     2972    9.8587     
 
 This initial model gives us an in-sample accuracy rate of close to 20%. As expected, the OOS rate is 
 lower.
@@ -86,10 +86,10 @@ comp2 <- readRDS("test/compare_3000_stupid_backoff_single.RDS")
 comp2oos <- readRDS("test/compare_3000_stupid_backoff_single_OOS.RDS")
 ```
 
-Test Set     Correct Tests Percent   # "the"
+Test Set     Correct Tests Percent   # Unigram predictions
 --------     ------- ----- -------   -----------
-In-sample    589     3000    19.6333   429
-Out-of-sample313     2972    10.5316   403
+In-sample    463     3000    15.4333   
+Out-of-sample313     2972    10.5316   124
 
 
 The in-sample accuracy is about the same as model 1, but the OOS accuracy jumps up from that model. 
@@ -142,10 +142,44 @@ B1) Unlimited unigrams; unlimited bigrams; > 1 trigram; optimal A 4-gram :
 9.76%  
 B2) Unlimited unigrams; unlimited bigrams; > 3 trigram; optimal A 4-gram :
 9.05%  
-C1) Unlimited unigrams; unlimited bigrams; > 1 trigram; optimal A 4-gram :
+C1) Unlimited unigrams; > 1 bigram; > optimal B trigram; optimal A 4-gram :
 10.26%  
 
 So adding frequency cutoffs did not help at all. The next thing we'll try is implementing POS 
 tagging to get us a better unigram accuracy. Improving this score may also improve C1 and models 
 that fall bcak to unigrams.
 
+Model 4 includes the POS lookup table. This consists of 32 different parts-of-speech and their most
+likely next word, according to our training data. 
+
+
+```r
+comp.pos.is <- readRDS("test/compare_3000_stupid_backoff_single_POS.RDS")
+comp.pos <- readRDS("test/compare_3000_stupid_backoff_single_OOS_POS.RDS")
+```
+
+Test Set     Correct Tests Percent   # Unigram predictions
+--------     ------- ----- -------   -----------
+In-sample     466     2972    15.6797   190
+Out-of-sample313     2972    10.5316   124
+
+Unfortunately we get the same perform with POS prediction. Further inspection shows the most likely
+response for phrases that had to fall back to uni-gram is "says" with a value of 
+55. Inspection of the test set shows
+that almost all of these cases were preceded with a proper noun, ie "Kate says". However, when the
+input is cleaned before going through the prediciton model, it is converted to lowercase, among 
+other things. This leaves the phrase "kate" which is tagged as a noun instead of a proper noun. 
+However, even if the input cleanup was not an issue, the POS model was trained on data that went 
+through a similar cleaning process. So there would not be many proper nouns in that training set. 
+The POS model currently predicts "they" for proper nouns. Training on raw data may result in a more
+accurate model that maybe predicts "says". It's also worth pointing out that the test data is from
+NPR articles which includes quotes and attributations for those quotes. In practice, this may not 
+be a true representation of input. The in-sample rows have "says" only once.   
+
+We can manually override the POS model by replacing "they" with "says" for proper nouns, etc. I 
+actually wouldn't consider this "manual", but a different method that can be automated: learning 
+based on actual data, ML. The original POS model failed because it was predicting the most likely 
+word given a POS for the prior word, which came from the training data. In actual use, the 
+prior word is not from the training data (if it was in the training data we could predict a proper 
+bigram), but it is unseen, and hence the POS prediction model. Given more time, we could re-train
+on unseen words. 
