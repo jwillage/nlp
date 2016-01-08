@@ -3,6 +3,7 @@ library(Matrix)
 library(plyr)
 library(quanteda)
 library(jsonlite)
+library(data.table)
 
 fn <- "data/Coursera-SwiftKey.zip"
 download.file("https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
@@ -48,20 +49,22 @@ rm(corp)
 #handle twitter mentions. otherwise replace @ with "at"
 #twitter hashtag removal. just remove octothorpe if it at the end of a tweet, otherwise,  gaps
 
-createModel <- function(gram, n){
+createModel <- function(gram, n, k = 1){
+  #gram is the list of grams. n as in n-gram. k is the number of options to keep
   print(paste(timestamp(quiet = T), "create model begin"))
   gram <- unlist(gram)
-  #rounding to 8 works for sample, may need to increase precision for larger corpora
-  #ie length of samp[[1]] == 114293. 1/114293 = 8.7e-6. can round after that (keep 2 extra JICOC)
-
+  len <- length(gram)
+  
   #filter out apostrophes
   print(paste(timestamp(quiet = T), "filtering apostrophes"))
   gram <- gsub("'", "", unlist(gram), fixed = T, perl = T)
   #make sure rownames are not taking up space, else set to NULL
   
+  #rounding to 8 works for sample, may need to increase precision for larger corpora
+  #ie length of samp[[1]] == 114293. 1/114293 = 8.7e-6. can round after that (keep 2 extra JICOC)
   print(paste(timestamp(quiet = T), "creating freq table"))
   f<- table(gram)
-  rf <- round(table(gram)/length(gram), 8)
+  rf <- round(f/len, 8)
   tf <- as.data.frame(rf, row.names = NULL, stringsAsFactors = F)
   tf$abs <- f
   rm(f); rm(rf);
@@ -87,8 +90,7 @@ createModel <- function(gram, n){
   if (length(idx) > 0) tf.s <- tf[-idx, ]
   rm(tf);  rm(sw);
 
-  #Indexing. For bigrams, only take [1] the first word to index
-  #for n>2, need to combine 1 - n-1 into a single word index
+  #Indexing. For bigrams, only take [1] the first word to index. n>2,combine 1:n-1 to a single idx
   print(paste(timestamp(quiet = T), "index unlisting"))
   t <- unlist(lapply(strsplit(tf.s$gram, " "), function(x) x[1:n-1]))
   print(paste(timestamp(quiet = T), "index subsetting"))
@@ -98,22 +100,16 @@ createModel <- function(gram, n){
   print(paste(timestamp(quiet = T), "index additional grams"))
   if (n > 2)  for(j in 2:(n - 1))  p <- paste(p, t[seq(j, length(t), by = n - 1)])
   tf.s$idx <- p
+  tf.s <- as.data.table(tf.s)
   
-  print(paste(timestamp(quiet = T), "lookup"))
-  #only keep the most frequent ngram by index
-  lookup <- setNames(aggregate(tf.s$Freq, by = list(tf.s$idx), max), c("idx", "Freq"))
-  #here look at filtering out grams with freq == 1
+  #keep top k predictions
+  model <- as.data.frame(tf.s[tf.s[, .I[order(Freq, decreasing = T)[1:k]], by = idx]$V1])
+  model <- model[complete.cases(model),]
   
-  print(paste(timestamp(quiet = T), "create model"))
-  model <- merge(lookup, tf.s)
-  #remove duplicate idx and freq, taking the first (alpha) occurance
-  #only take freq or rel freq in next step, depending on final implementation
-  print(paste(timestamp(quiet = T), "model remove dups"))
-  model <- model[!duplicated(model$idx), ]
   #remove first n-1 grams and keep only the term to predict
   print(paste(timestamp(quiet = T), "model unlisting"))
   model$gram <- unlist(lapply(strsplit(model$gram, " "), function(x) unclass(x)[n]))
-  rm(gram); rm(tf.s); rm(lookup)
+  rm(gram); rm(tf.s); 
   
   model
 }
@@ -134,11 +130,6 @@ combineModels <- function(model){
   #add freq in the return
   #final[, c("idx", "x")]
   final
-}
-
-singleModel <- function(ngrams){
-  #takes a list of multiple ngrams and combines them before computing frequency
-  
 }
 
 bigram.model.samp <- createModel(bigram.samp.100000, 2)
@@ -262,7 +253,12 @@ pos <- merge(lookup, c)
 pos <- pos[!duplicated(pos$Group.1), c("Group.1", "Group.2")]
 names(pos) <- c("pos", "pred")
 
-#converting to lower changes NNP to NN
+#create hash-based models. 
+model.tri.hash <- trigram.model.sing[, c(1, 3)]
+model.tri.hash$idx <- as.integer(hash(model.tri.hash$idx))
+
+system.time(quad.5 <-createModel(readRDS("data/quadgram_EN_samp_100000.RDS"), 4, 5))
+saveRDS(quad.5, "model/model_quad_5_combined.RDS")
 
 #consider using unigrams from news dataset as a dictionary. combine that with a frequency threshold
 #so things high frequency internet slang doesn't get filtered out. 
@@ -270,4 +266,7 @@ names(pos) <- c("pos", "pred")
 #want to elminiate low freq words with <unk>
 
 #convert @ to "at", other misc cleanup, ie "**text**
+
+#space permitting, create models with larger k. that means for quad matches, gives tris more opptys
+#to hit, else they get a score of 0
 
