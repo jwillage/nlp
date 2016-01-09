@@ -63,43 +63,60 @@ stupidBackoffa <- function(phrase, bi.model, tri.model, quad.model){
                   )))
 }
 
+#consider including weighted top trigram etc options that do not match with quadgram 
 simpleInterpolation <- function(phrase, lambda = 0.4, top = 1){
+  score <- function(modelResult, modelList){
+    #unigram list is mandatory. further interpolation option but models need to be in asc n order
+    
+    gram <- modelResult$gram
+    scores <- list(); ret <- list();
+    
+    scores[[1]] <- modelList[[1]][modelList[[1]]$gram %in% gram, "Freq"] * lambda^3
+    scores[[1]] <- data.frame(Freq = scores[[1]], gram = rownames(scores[[1]]), 
+                             scores = scores[[1]] * lambda^3)
+    
+    if(length(modelList) > 1)
+      for(i in 2 : (length(modelList))){
+        scores[[length(scores) + 1]] <- modelList[[i]][modelList[[i]]$gram %in% gram & 
+                                                       modelList[[i]]$idx == 
+                                                       paste(phrase[(len-(i-2)):len], collapse = " "), 
+                                                     c("Freq", "gram")]
+        scores[[length(scores)]]$scores <- scores[[length(scores)]]$Freq * (lambda^(4-i))
+      }
+    
+    scores <- rbind.fill(scores)
+    scores <- rbind(scores, 
+          data.frame(Freq = modelResult$Freq, gram = modelResult$gram, scores = modelResult$Freq))
+    scores <- setNames(aggregate(scores$scores, by = list(scores$gram), sum), c("gram", "scores"))
+    scores[order(scores$scores, decreasing = T), "gram"][1:top]
+  }
+  
   phrase <- strsplit(phrase, " ")[[1]]
   len <- length(phrase)
   bi <- NULL; tri <- NULL; quad <- NULL;
-  if (len >= 1) 
-    bi <- model.bi.k5[model.bi.k5$idx == 
-                              paste(phrase[len], collapse = " "), ]
-  if (len >= 2)
-    tri <- model.tri.k5[model.tri.k5$idx == 
-                                paste(phrase[(len - 1) : len], collapse = " "), ]
-  if (len >= 3)
-    quad <- model.quad.k5[model.quad.k5$idx == 
-                                  paste(phrase[(len - 2) : len], collapse = " "), ]
-  
-  #if we don't have k quadgrams, take as many as we have and then the other options start at tri
-  if(nrow(quad) >0){
-    gram <- quad$gram
-    score <- list()
-    score[["tri"]] <- model.tri.k5[model.tri.k5$gram %in% gram & 
-                                model.tri.k5$idx == paste(phrase[(len - 1) : len], collapse = " "), 
-                              c("Freq", "gram")]
-    score[["tri"]]$score <- score[["tri"]]$Freq * lambda
-    score[["bi"]] <- model.bi.k5[model.bi.k5$gram %in% gram & 
-                                model.bi.k5$idx == paste(phrase[len], collapse = " "), 
-                            c("Freq", "gram")]
-    score[["bi"]]$score <- score[["bi"]]$Freq * lambda^2
-    score[["uni"]] <- unigrams[unigrams$gram %in% gram, "Freq"] * lambda^3
-    score[["uni"]] <- data.frame(Freq = score[["uni"]], gram = rownames(score[["uni"]]), 
-                                 score = score[["uni"]] * lambda^3)
-    score <- rbind.fill(score)
-    rbind(score, data.frame(Freq = quad$Freq, gram = quad$gram, score = quad$Freq))
-    score <- setNames(aggregate(score$score, by = list(score$gram), sum), c("gram", "score"))
+  if (len >= 1){ 
+    bi <- model.bi.k5[model.bi.k5$idx == paste(phrase[len], collapse = " "), ]
+    if (nrow(bi) == 0) bi <- NULL
+  }
+  if (len >= 2){
+    tri <- model.tri.k5[model.tri.k5$idx == paste(phrase[(len - 1) : len], collapse = " "), ]
+    if (nrow(tri) == 0) tri <- NULL 
+  }
+  if (len >= 3){
+    quad <- model.quad.k5[model.quad.k5$idx == paste(phrase[(len - 2) : len], collapse = " "), ]
+    if (nrow(quad) == 0) quad <- NULL
   }
   
-  
-  
-  score[order(score$score, decreasing = T), "gram"][1:top]
-  
-  #consider including weighted top trigram etc options that do not match with quadgram 
+  #add any supplmental info ie score, which gram won, etc.
+  #confirm pos and default empty string are correct, ie number of times
+  ifelse(rep(!is.null(quad), top),
+         score(quad, list(unigrams, model.bi.k5, model.tri.k5)),
+         ifelse(rep(!is.null(tri), top),
+            score(tri, list(unigrams, model.bi.k5)),
+            ifelse(rep(!is.null(bi), top),
+               score(bi, list(unigrams)),
+               ifelse(len > 0, c(
+                 pos[pos$pos == annotate(phrase[len], pta, annotate(phrase[len], 
+                    list(sta, wta)))[2]$features[[1]][[1]], "pred"], 1), c("", 1))
+            ) ) )
 }
