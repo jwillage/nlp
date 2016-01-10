@@ -88,7 +88,8 @@ simpleInterpolation <- function(phrase, lambda = 0.4, top = 1){
     scores <- rbind(scores, 
           data.frame(Freq = modelResult$Freq, gram = modelResult$gram, scores = modelResult$Freq))
     scores <- setNames(aggregate(scores$scores, by = list(scores$gram), sum), c("gram", "scores"))
-    scores[order(scores$scores, decreasing = T), "gram"][1:top]
+    scores[order(scores$scores, decreasing = T), ][1:top,]
+    #c(ret$gram, ret$scores)
   }
   
   phrase <- strsplit(phrase, " ")[[1]]
@@ -107,16 +108,19 @@ simpleInterpolation <- function(phrase, lambda = 0.4, top = 1){
     if (nrow(quad) == 0) quad <- NULL
   }
   
+  ret <- NULL
   #add any supplmental info ie score, which gram won, etc.
   #confirm pos and default empty string are correct, ie number of times
   ifelse(rep(!is.null(quad), top),
-         score(quad, list(unigrams, model.bi.k5, model.tri.k5)),
+         ret <- score(quad, list(unigrams, model.bi.k5, model.tri.k5)),
          ifelse(rep(!is.null(tri), top),
-            score(tri, list(unigrams, model.bi.k5)),
+            ret <- score(tri, list(unigrams, model.bi.k5)),
             ifelse(rep(!is.null(bi), top),
-               score(bi, list(unigrams)),
-               ifelse(len > 0, c(
+               ret <- score(bi, list(unigrams)),
+               ifelse(len > 0, ret <- c(
                  pos[pos$pos == annotate(phrase[len], pta, annotate(phrase[len], 
-                    list(sta, wta)))[2]$features[[1]][[1]], "pred"], 1), c("", 1))
+                    list(sta, wta)))[2]$features[[1]][[1]], "pred"], 1), 
+                 ret <- c("", 1))
             ) ) )
+  ret
 }
