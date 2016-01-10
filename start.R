@@ -132,9 +132,11 @@ combineModels <- function(model){
   final
 }
 
-bigram.model.samp <- createModel(bigram.samp.100000, 2)
-trigram.model.samp <- createModel(trigram.samp.100000, 3)
-quad.model.samp <- createModel(quadgram.samp.100000, 4)
+#bigram.model.samp <- createModel(bigram.samp.100000, 2)
+#trigram.model.samp <- createModel(trigram.samp.100000, 3)
+#quad.model.samp <- createModel(quadgram.samp.100000, 4)
+quad.5 <-createModel(readRDS("data/quadgram_EN_samp_100000.RDS"), 4, 5)
+
 
 stupidBackoff <- function(phrase){
   phrase <- strsplit(phrase, " ")[[1]]
@@ -257,8 +259,10 @@ names(pos) <- c("pos", "pred")
 model.tri.hash <- trigram.model.sing[, c(1, 3)]
 model.tri.hash$idx <- as.integer(hash(model.tri.hash$idx))
 
-system.time(quad.5 <-createModel(readRDS("data/quadgram_EN_samp_100000.RDS"), 4, 5))
-saveRDS(quad.5, "model/model_quad_5_combined.RDS")
+model.tri.top5.hash <- model.tri.k5[, c("idx", "gram", "Freq")]
+model.tri.top5.hash$idx <- as.integer(hash(model.tri.top5.hash$idx))
+
+
 
 #consider using unigrams from news dataset as a dictionary. combine that with a frequency threshold
 #so things high frequency internet slang doesn't get filtered out. 

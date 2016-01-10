@@ -6,7 +6,9 @@ shinyServer(
   function(input, output){
     fragment <- renderPrint({input$fragment})
     frag <- renderText({input$fragment})
+#  output$pred <- renderPrint(paste({input$fragment}, 
+#                                     stupidBackoff(cleanInput(input$fragment))[1]))
     output$pred <- renderPrint(paste({input$fragment}, 
-                                     stupidBackoff(cleanInput(input$fragment))[1]))
+                                     simpleInterpolation(cleanInput(input$fragment))[1, "gram"]))
   }
 )
