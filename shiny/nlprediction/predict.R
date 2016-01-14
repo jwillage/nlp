@@ -24,35 +24,30 @@ stupidBackoff <- function(phrase, hash = F, top = 1, bi.model = model.bi.k5, tri
                           quad.model = model.quad.k5, quint.model = model.quint.k5){
   phrase <- strsplit(phrase, " ")[[1]]; p <- NULL
   len <- length(phrase)
-  bi <- NULL; tri <- NULL; quad <- NULL; quint <- NULL;
+  bi <- data.frame(); tri <- data.frame(); quad <- data.frame(); quint <- data.frame();
+
   if (len >= 1){
     p <- paste(phrase[len], collapse = " ")
-    bi <- bi.model[bi.model$idx ==  ifelse(hash, hash(p), p), ]}
+    bi <- bi.model[bi.model$idx ==  ifelse(hash, hash(p), p), ]
+    if (nrow(bi) > 0) bi$n <- 2}
   if (len >= 2){
     p <- paste(phrase[(len - 1) : len], collapse = " ")
-    tri <- tri.model[tri.model$idx == ifelse(hash, hash(p), p), ]}
+    tri <- tri.model[tri.model$idx == ifelse(hash, hash(p), p), ]
+    if (nrow(tri) >0) tri$n <- 3}
   if (len >= 3){
     p <- paste(phrase[(len - 2) : len], collapse = " ")
-    quad <- quad.model[quad.model$idx ==  ifelse(hash, hash(p), p), ]}
-  if (len >= 3){
+    quad <- quad.model[quad.model$idx ==  ifelse(hash, hash(p), p), ]
+    if (nrow(quad) >0)  quad$n <- 4}
+  if (len >= 4){
     p <- paste(phrase[(len - 3) : len], collapse = " ")
-    quint <- quint.model[quint.model$idx ==  ifelse(hash, hash(p), p), ]}
-  
-#   ifelse(c(rep(length(quint$gram) >0, (top + 1))), c(quint$gram[1:top], 5),   
-#     ifelse (c(rep(length(quad$gram) > 0, (top + 1))), c(quad$gram[1:top], 4), 
-#             ifelse (c(rep(length(tri$gram) > 0, (top + 1))), c(tri$gram[1:top], 3), 
-#                     ifelse (c(rep(length(bi$gram) > 0, (top + 1))), c(bi$gram[1:top], 2),
-#                             ifelse(rep(len > 0, 2), c(
-#                               pos[pos$pos == annotate(phrase[len], pta, annotate(phrase[len], 
-#                               list(sta, wta)))[2]$features[[1]][[1]], "pred"], 1), 
-#                               c("", 1))) )))
+    quint <- quint.model[quint.model$idx ==  ifelse(hash, hash(p), p), ]
+    if (nrow(quint) >0) quint$n <- 5}
   
   ret <- NULL
   ret <- rbind(quint, quad, tri, bi)
-  #TODO bind the gram to it's respective rows, ie rbind(cbind(quint, 5), cbind(quad, 4)
-  if (nrow(ret) > 0 )
-    return(ret[1:top,])
-  
+  if (nrow(ret) > 0)
+    return(ret[order(ret$n,ret$Freq, decreasing = T),][1:top,])
+
   ifelse(rep(len > 0, 2), c(
     pos[pos$pos == annotate(phrase[len], pta, annotate(phrase[len], 
                                                        list(sta, wta)))[2]$features[[1]][[1]], "pred"], 1), 
