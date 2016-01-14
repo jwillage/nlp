@@ -207,6 +207,137 @@ comp.pos &lt;- readRDS(&quot;test/compare_3000_stupid_backoff_single_OOS_POS.RDS
 </table>
 <p>Unfortunately we get the same perform with POS prediction. Further inspection shows the most likely response for phrases that had to fall back to uni-gram is “says” with a value of 55. Inspection of the test set shows that almost all of these cases were preceded with a proper noun, ie “Kate says”. However, when the input is cleaned before going through the prediciton model, it is converted to lowercase, among other things. This leaves the phrase “kate” which is tagged as a noun instead of a proper noun. However, even if the input cleanup was not an issue, the POS model was trained on data that went through a similar cleaning process. So there would not be many proper nouns in that training set. The POS model currently predicts “they” for proper nouns. Training on raw data may result in a more accurate model that maybe predicts “says”. It’s also worth pointing out that the test data is from NPR articles which includes quotes and attributations for those quotes. In practice, this may not be a true representation of input. The in-sample rows have “says” only once.</p>
 <p>We can manually override the POS model by replacing “they” with “says” for proper nouns, etc. I actually wouldn’t consider this “manual”, but a different method that can be automated: learning based on actual data, ML. The original POS model failed because it was predicting the most likely word given a POS for the prior word, which came from the training data. In actual use, the prior word is not from the training data (if it was in the training data we could predict a proper bigram), but it is unseen, and hence the POS prediction model. Given more time, we could re-train on unseen words.</p>
+<p>Model 5 uses simple interpolation. In the first test, lambda is set to 0.4 for each model <em>k</em>. The second test set lambda to 0.05.</p>
+<p><strong>Model 5 Performance</strong></p>
+<pre class="r"><code>comp.int &lt;- readRDS(&quot;test/compare_3000_interpolation.RDS&quot;)
+comp.int.05 &lt;- readRDS(&quot;test/compare_3000_interpolation_0.05.RDS&quot;)
+len &lt;- nrow(comp.int) - sum(comp.int[,1] == &quot;&lt;NA&gt;&quot;)
+comp.int.oos &lt;- readRDS(&quot;test/compare_3000_interpolation_OOS.RDS&quot;)
+comp.int.05.oos &lt;- readRDS(&quot;test/compare_3000_interpolation_0.05_OOS.RDS&quot;)
+len.oos &lt;- nrow(comp.int.oos) - sum(comp.int.oos[,1] == &quot;&lt;NA&gt;&quot;)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Test Set</th>
+<th align="left">Correct</th>
+<th align="left">Tests</th>
+<th align="left">Percent</th>
+<th align="left"># Unigram predictions</th>
+<th align="left">Lambda</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">In-sample</td>
+<td align="left">341</td>
+<td align="left">2874</td>
+<td align="left">11.865</td>
+<td align="left">190</td>
+<td align="left">0.4</td>
+</tr>
+<tr class="even">
+<td align="left">Out-of-sample</td>
+<td align="left">182</td>
+<td align="left">2972</td>
+<td align="left">6.1238</td>
+<td align="left">123</td>
+<td align="left">0.4</td>
+</tr>
+<tr class="odd">
+<td align="left">In-sample</td>
+<td align="left">347</td>
+<td align="left">2874</td>
+<td align="left">12.0738</td>
+<td align="left">190</td>
+<td align="left">0.05</td>
+</tr>
+<tr class="even">
+<td align="left">Out-of-sample</td>
+<td align="left">199</td>
+<td align="left">2972</td>
+<td align="left">6.6958</td>
+<td align="left">123</td>
+<td align="left">0.05</td>
+</tr>
+</tbody>
+</table>
+<p>We see improvement as the lambda decreases, weighting the lower order <em>n</em>-grams less. As the lambda value decreases, the model approaches stupid backoff.</p>
+<p>For Model 6, we increase the number of grams for each index. Model 5 took the top 5 most frequent grams per index. Model 6 doubles that, taking the top 10.</p>
+<p><strong>Model 6 Performance</strong></p>
+<pre class="r"><code>comp.int.k10.4 &lt;- readRDS(&quot;test/compare_3000_interpolation_k10_0.4_OOS.RDS&quot;)
+comp.int.k10.05 &lt;- readRDS(&quot;test/compare_3000_interpolation_k10_0.05_OOS.RDS&quot;)  
+comp.int.k10.005 &lt;- readRDS(&quot;test/compare_3000_interpolation_k10_.005_OOS.RDS&quot;)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Test Set</th>
+<th align="left">Correct</th>
+<th align="left">Tests</th>
+<th align="left">Percent</th>
+<th align="left"># Unigram predictions</th>
+<th align="left">Lambda</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Out-of-sample</td>
+<td align="left">155</td>
+<td align="left">2972</td>
+<td align="left">5.2153</td>
+<td align="left">124</td>
+<td align="left">0.4</td>
+</tr>
+<tr class="even">
+<td align="left">Out-of-sample</td>
+<td align="left">195</td>
+<td align="left">2972</td>
+<td align="left">6.5612</td>
+<td align="left">124</td>
+<td align="left">0.05</td>
+</tr>
+<tr class="odd">
+<td align="left">Out-of-sample</td>
+<td align="left">248</td>
+<td align="left">2972</td>
+<td align="left">8.3445</td>
+<td align="left">124</td>
+<td align="left">0.005</td>
+</tr>
+</tbody>
+</table>
+<p>Model 7 increases the number of grams to 5. We return to stupid backoff, which has so far yielded the best results. We now add the 5-gram to the model.</p>
+<p><strong>Model 7 Performance</strong></p>
+<pre class="r"><code>comp7 &lt;- readRDS(&quot;test/compare_3000_stupid_backoff_quint.RDS&quot;)
+comp7.oos &lt;- readRDS(&quot;test/compare_3000_stupid_backoff_quint_OOS.RDS&quot;)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Test Set</th>
+<th align="left">Correct</th>
+<th align="left">Tests</th>
+<th align="left">Percent</th>
+<th align="left"># Unigram predictions</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">In-sample</td>
+<td align="left">578</td>
+<td align="left">2874</td>
+<td align="left">20.111</td>
+<td align="left">3 6</td>
+</tr>
+<tr class="even">
+<td align="left">Out-of-sample</td>
+<td align="left">297 29</td>
+<td align="left">72</td>
+<td align="left">9.9933 0</td>
+<td align="left"></td>
+</tr>
+</tbody>
+</table>
+<p>Interestingly, we see a slight decrease in OOS accuracy from Model 2. This is likely due to biasness in the sample data.</p>
+<p>Although pruning low-frequency grams did not help the model earlier, we can’t help but think it will help with what is surely overfitting.</p>
 
 
 </div>

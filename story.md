@@ -183,3 +183,66 @@ word given a POS for the prior word, which came from the training data. In actua
 prior word is not from the training data (if it was in the training data we could predict a proper 
 bigram), but it is unseen, and hence the POS prediction model. Given more time, we could re-train
 on unseen words. 
+
+Model 5 uses simple interpolation. In the first test, lambda is set to 0.4 for each model *k*. The
+second test set lambda to 0.05.
+
+**Model 5 Performance**
+
+
+```r
+comp.int <- readRDS("test/compare_3000_interpolation.RDS")
+comp.int.05 <- readRDS("test/compare_3000_interpolation_0.05.RDS")
+len <- nrow(comp.int) - sum(comp.int[,1] == "<NA>")
+comp.int.oos <- readRDS("test/compare_3000_interpolation_OOS.RDS")
+comp.int.05.oos <- readRDS("test/compare_3000_interpolation_0.05_OOS.RDS")
+len.oos <- nrow(comp.int.oos) - sum(comp.int.oos[,1] == "<NA>")
+```
+Test Set     Correct Tests Percent   # Unigram predictions  Lambda
+--------     ------- ----- -------   -----------            -------
+In-sample     341     2874    11.865   190                      0.4
+Out-of-sample     182  2972    6.1238   123                     0.4
+In-sample     347     2874    12.0738   190                      0.05
+Out-of-sample     199  2972    6.6958   123                     0.05
+
+We see improvement as the lambda decreases, weighting the lower order *n*-grams less. As the lambda
+value decreases, the model approaches stupid backoff. 
+
+For Model 6, we increase the number of grams for each index. Model 5 took the top 5 most frequent 
+grams per index. Model 6 doubles that, taking the top 10.
+
+**Model 6 Performance**
+
+
+```r
+comp.int.k10.4 <- readRDS("test/compare_3000_interpolation_k10_0.4_OOS.RDS")
+comp.int.k10.05 <- readRDS("test/compare_3000_interpolation_k10_0.05_OOS.RDS")  
+comp.int.k10.005 <- readRDS("test/compare_3000_interpolation_k10_.005_OOS.RDS")
+```
+Test Set     Correct Tests Percent   # Unigram predictions  Lambda
+--------     ------- ----- -------   -----------            -------
+Out-of-sample     155  2972    5.2153   124                     0.4
+Out-of-sample     195  2972    6.5612   124                     0.05
+Out-of-sample     248  2972    8.3445   124                     0.005
+
+Model 7 increases the number of grams to 5. We return to stupid backoff, which has so far yielded 
+the best results. We now add the 5-gram to the model.
+
+**Model 7 Performance**
+
+
+```r
+comp7 <- readRDS("test/compare_3000_stupid_backoff_quint.RDS")
+comp7.oos <- readRDS("test/compare_3000_stupid_backoff_quint_OOS.RDS")
+```
+
+Test Set     Correct Tests Percent   # Unigram predictions
+--------     ------- ----- -------   -----------
+In-sample    578       2874    20.1113   6
+Out-of-sample297   2972    9.9933   0
+
+Interestingly, we see a slight decrease in OOS accuracy from Model 2. This is likely due to biasness
+in the sample data. 
+
+Although pruning low-frequency grams did not help the model earlier, we can't help but think it will
+help with what is surely overfitting. 
