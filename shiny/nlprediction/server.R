@@ -1,5 +1,4 @@
 library(shiny)
-library(hashr)
 source("predict.R")
 
 shinyServer(
