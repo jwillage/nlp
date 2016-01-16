@@ -1,6 +1,7 @@
 library(openNLP)
 library(NLP)
 library(plyr)
+library(dplyr)
 library(hashr)
 
 bi.model <- readRDS("model_bi_combined_top5_hash.RDS")
@@ -45,7 +46,6 @@ stupidBackoff <- function(phrase, hash = F, top = 1, bi.model = model.bi.k5, tri
   
   ret <- NULL
   ret <- rbind(quint, quad, tri, bi)
-  #remove dups
   ret <- ret[!duplicated(ret$gram),]
   if (nrow(ret) > 0)
     return(ret[order(ret$n,ret$Freq, decreasing = T),][1:top,])
@@ -61,7 +61,8 @@ stupidBackoff <- function(phrase, hash = F, top = 1, bi.model = model.bi.k5, tri
 #consider including weighted top trigram etc options that do not match with quadgram 
 #have k as a parm. ie only take into account the first k matches and work backwards from there.
 simpleInterpolation <- function(phrase, lambda = 0.4, top = 1, hash = F, bi.model = model.bi.k5, 
-                                tri.model = model.tri.k5, quad.model = model.quad.k5){
+                                tri.model = model.tri.k5, quad.model = model.quad.k5, 
+                                quint.model = model.quint.k5){
   score <- function(modelResult, modelList){
     #unigram list is mandatory. further interpolation option but models need to be in asc n order
     
@@ -70,7 +71,8 @@ simpleInterpolation <- function(phrase, lambda = 0.4, top = 1, hash = F, bi.mode
     
     scores[[1]] <- modelList[[1]][modelList[[1]]$gram %in% gram, "Freq"] 
     scores[[1]] <- data.frame(Freq = scores[[1]], gram = names(scores[[1]]), 
-                             scores = scores[[1]] * lambda^(length(modelList)))
+                             scores = scores[[1]] * lambda^(length(modelList)), 
+                             stringsAsFactors = F)
     
     if(length(modelList) > 1)
       for(i in 2 : (length(modelList))){
@@ -91,7 +93,7 @@ simpleInterpolation <- function(phrase, lambda = 0.4, top = 1, hash = F, bi.mode
   
   phrase <- strsplit(phrase, " ")[[1]]
   len <- length(phrase)
-  bi <- NULL; tri <- NULL; quad <- NULL;
+  bi <- NULL; tri <- NULL; quad <- NULL; quint <- NULL;
   if (len >= 1){ 
     p <- paste(phrase[len], collapse = " ")
     bi <- bi.model[bi.model$idx == ifelse(hash, hash(p), p), ]
@@ -107,23 +109,30 @@ simpleInterpolation <- function(phrase, lambda = 0.4, top = 1, hash = F, bi.mode
     quad <- quad.model[quad.model$idx == ifelse(hash, hash(p), p), ]
     if (nrow(quad) == 0) quad <- NULL
   }
+  if (len >= 4){
+    p <- paste(phrase[(len - 3) : len], collapse = " ")
+    quint<- quint.model[quint.model$idx == ifelse(hash, hash(p), p), ]
+    if (nrow(quint) == 0) quint <- NULL
+  }
   
   ret <- NULL
   #add any supplmental info ie score, which gram won, etc.
-  #confirm pos and default empty string are correct, ie number of times
-  ifelse(!is.null(quad),
-         ret <- cbind(score(quad, list(unigrams, bi.model, tri.model)), 4),
-         ifelse(!is.null(tri),
-            ret <- cbind(score(tri, list(unigrams, bi.model)), 3),
-            ifelse(!is.null(bi),
-               ret <- cbind(score(bi, list(unigrams)), 2),
-               ifelse(len > 0, {
-                 gram <- pos[pos$pos == annotate(phrase[len], pta, annotate(phrase[len], 
-                            list(sta, wta)))[2]$features[[1]][[1]], "pred"]
-                 if(length(gram) == 0) gram <- "<NA>"
-                 ret <- data.frame(gram = gram
-                 , scores = NA, 1)}, 
-                 ret <- data.frame(gram = "", scores = NA, 1))
-            ) ) )
+  ifelse(!is.null(quint),
+    ret <- cbind(score(quint, list(unigrams, bi.model, tri.model, quad.model)), 5),
+    ifelse(!is.null(quad),
+           ret <- cbind(score(quad, list(unigrams, bi.model, tri.model)), 4),
+           ifelse(!is.null(tri),
+              ret <- cbind(score(tri, list(unigrams, bi.model)), 3),
+              ifelse(!is.null(bi),
+                 ret <- cbind(score(bi, list(unigrams)), 2),
+                 ifelse(len > 0, {
+                   gram <- pos[pos$pos == annotate(phrase[len], pta, annotate(phrase[len], 
+                              list(sta, wta)))[2]$features[[1]][[1]], "pred"]
+                   if(length(gram) == 0) gram <- "<NA>"
+                   ret <- data.frame(gram = gram
+                   , scores = NA, n = 1, stringsAsFactors = F)}, 
+                   ret <- data.frame(gram = "", scores = NA, n = 1, stringsAsFactors = F))
+            ) ) ) )
+  names(ret)[3] <- "n"
   ret
 }
