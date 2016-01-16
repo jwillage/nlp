@@ -6,8 +6,8 @@ shinyUI(
     includeCSS("www/spacelab.css"),
 
     h1("Next Word Prediction", align = 'center', class='text-primary'),
-    h5(id = "inputBox", "Please wait, loading ...", class='text-warning'),
-    HTML("<br><br><div align = 'center'>
+    h5(id = "inputBox", "Please wait, loading ...", class='text-warning', align='center'),
+    hidden(div(id = "main", HTML("<br><br><div align = 'center'>
           <label class='control-label' for='fragment'>Input phrase </label>
           <input type='text' name = 'fragment'>  &nbsp;&nbsp;&nbsp;
           <label class='control-label' for='k'>Max results</label>
@@ -22,5 +22,6 @@ shinyUI(
         </div>")
     ,h3(textOutput("topPred"), align = "center", class='text-info')
     ,uiOutput("otherPred")
+    ))
 )
 )
