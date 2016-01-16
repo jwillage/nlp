@@ -1,10 +1,12 @@
 library(shiny)
 shinyUI(
   bootstrapPage(
+    useShinyjs(),
     theme = "spacelab.css",
     includeCSS("www/spacelab.css"),
-    #todo change class
+
     h1("Next Word Prediction", align = 'center', class='text-primary'),
+    h5(id = "inputBox", "Please wait, loading ...", class='text-warning'),
     HTML("<br><br><div align = 'center'>
           <label class='control-label' for='fragment'>Input phrase </label>
           <input type='text' name = 'fragment'>  &nbsp;&nbsp;&nbsp;
