@@ -6,9 +6,14 @@ shinyServer(
   function(input, output){
     toggle("inputBox")
     toggle("main")
-    pred <- reactive({stupidBackoff(cleanInput(input$fragment), hash = T, top = input$k, 
+    pred <- reactive({
+      if(input$method == 'b')
+        return(stupidBackoff(cleanInput(input$fragment), hash = T, top = input$k, 
                                            bi.model = bi.model, tri.model = tri.model, 
-                                           quad.model = quad.model, quint.model = quint.model)  })
+                                           quad.model = quad.model, quint.model = quint.model))  
+      simpleInterpolation(cleanInput(input$fragment), hash = T, top = input$k, bi.model = bi.model,
+                          tri.model = tri.model, quad.model = quad.model, quint.model = quint.model)
+      })
      
   output$topPred <- renderPrint(cat(pred()[1, "gram"]))
 
