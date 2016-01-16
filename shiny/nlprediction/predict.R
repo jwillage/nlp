@@ -3,10 +3,10 @@ library(NLP)
 library(plyr)
 library(hashr)
 
-model.bi.k5 <- readRDS("model_bi_combined_top5_hash.RDS")
-model.tri.k5 <- readRDS("model_tri_combined_top5_hash.RDS")
-model.quad.k5 <- readRDS("model_quad_combined_top5_hash.RDS")
-model.quint.k5 <- readRDS("model_quint_combined_top5_hash.RDS")
+bi.model <- readRDS("model_bi_combined_top5_hash.RDS")
+tri.model <- readRDS("model_tri_combined_top5_hash.RDS")
+quad.model <- readRDS("model_quad_combined_top5_hash.RDS")
+quint.model <- readRDS("model_quint_combined_top5_hash.RDS")
 unigrams <- readRDS("unigram_tf.s.RDS")
 pos <- readRDS("pos.RDS")
 
@@ -45,14 +45,16 @@ stupidBackoff <- function(phrase, hash = F, top = 1, bi.model = model.bi.k5, tri
   
   ret <- NULL
   ret <- rbind(quint, quad, tri, bi)
+  #remove dups
+  ret <- ret[!duplicated(ret$gram),]
   if (nrow(ret) > 0)
     return(ret[order(ret$n,ret$Freq, decreasing = T),][1:top,])
 
   ifelse(length(phrase) > 0, 
     ret<-data.frame(idx = "POS", gram = pos[pos$pos == annotate(phrase[len], pta, annotate(phrase[len], 
                                                        list(sta, wta)))[2]$features[[1]][[1]], "pred"], 
-               freq = 0, n = 1), 
-    ret<-data.frame(idx = "", gram = "", freq = 0,n = 1))
+               freq = 0, n = 1, stringsAsFactors = F), 
+    ret<-data.frame(idx = "", gram = "", freq = 0,n = 1, stringsAsFactors = F))
   ret
 }
 
