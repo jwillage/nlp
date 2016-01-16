@@ -6,7 +6,7 @@ library(hashr)
 model.bi.k5 <- readRDS("model_bi_combined_top5_hash.RDS")
 model.tri.k5 <- readRDS("model_tri_combined_top5_hash.RDS")
 model.quad.k5 <- readRDS("model_quad_combined_top5_hash.RDS")
-model.quint.k5 <- readRDS("model_quint_cominbed_top5.RDS")
+model.quint.k5 <- readRDS("model_quint_combined_top5_hash.RDS")
 unigrams <- readRDS("unigram_tf.s.RDS")
 pos <- readRDS("pos.RDS")
 
@@ -48,10 +48,12 @@ stupidBackoff <- function(phrase, hash = F, top = 1, bi.model = model.bi.k5, tri
   if (nrow(ret) > 0)
     return(ret[order(ret$n,ret$Freq, decreasing = T),][1:top,])
 
-  ifelse(rep(len > 0, 2), c(
-    pos[pos$pos == annotate(phrase[len], pta, annotate(phrase[len], 
-                                                       list(sta, wta)))[2]$features[[1]][[1]], "pred"], 1), 
-    c("", 1))
+  ifelse(length(phrase) > 0, 
+    ret<-data.frame(idx = "POS", gram = pos[pos$pos == annotate(phrase[len], pta, annotate(phrase[len], 
+                                                       list(sta, wta)))[2]$features[[1]][[1]], "pred"], 
+               freq = 0, n = 1), 
+    ret<-data.frame(idx = "", gram = "", freq = 0,n = 1))
+  ret
 }
 
 #consider including weighted top trigram etc options that do not match with quadgram 
