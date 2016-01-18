@@ -1,3 +1,5 @@
+library(ggplot2)
+library(ggthemes)
 library(openNLP)
 library(NLP)
 library(plyr)
@@ -14,6 +16,8 @@ pos <- readRDS("pos.RDS")
 sta <- Maxent_Sent_Token_Annotator()
 wta <- Maxent_Word_Token_Annotator()
 pta <- Maxent_POS_Tag_Annotator()
+
+#TODO combine if chains from both predict functions. accept list of models and loop through
 
 cleanInput <- function(phrase){
   library(quanteda)
@@ -47,19 +51,20 @@ stupidBackoff <- function(phrase, hash = F, top = 1, bi.model = model.bi.k5, tri
   ret <- NULL
   ret <- rbind(quint, quad, tri, bi)
   ret <- ret[!duplicated(ret$gram),]
+  ret$scores <- ret$Freq
+  #ret$n <- as.factor(ret$n)
   if (nrow(ret) > 0)
     return(ret[order(ret$n,ret$Freq, decreasing = T),][1:top,])
 
   ifelse(length(phrase) > 0, 
-    ret<-data.frame(idx = "POS", gram = pos[pos$pos == annotate(phrase[len], pta, annotate(phrase[len], 
+    ret<-data.frame(idx = "POS", gram = pos[pos$pos == NLP::annotate(phrase[len], pta, NLP::annotate(phrase[len], 
                                                        list(sta, wta)))[2]$features[[1]][[1]], "pred"], 
-               freq = 0, n = 1, stringsAsFactors = F), 
-    ret<-data.frame(idx = "", gram = "", freq = 0,n = 1, stringsAsFactors = F))
+               freq = 0, n = 1, scores =0, stringsAsFactors = F), 
+    ret<-data.frame(idx = "", gram = "", freq = 0,n = 1, scores =0, stringsAsFactors = F))
   ret
 }
 
 #consider including weighted top trigram etc options that do not match with quadgram 
-#have k as a parm. ie only take into account the first k matches and work backwards from there.
 simpleInterpolation <- function(phrase, lambda = 0.4, top = 1, hash = F, bi.model = model.bi.k5, 
                                 tri.model = model.tri.k5, quad.model = model.quad.k5, 
                                 quint.model = model.quint.k5){
@@ -126,13 +131,14 @@ simpleInterpolation <- function(phrase, lambda = 0.4, top = 1, hash = F, bi.mode
               ifelse(!is.null(bi),
                  ret <- cbind(score(bi, list(unigrams)), 2),
                  ifelse(len > 0, {
-                   gram <- pos[pos$pos == annotate(phrase[len], pta, annotate(phrase[len], 
+                   gram <- pos[pos$pos == NLP::annotate(phrase[len], pta, NLP::annotate(phrase[len], 
                               list(sta, wta)))[2]$features[[1]][[1]], "pred"]
                    if(length(gram) == 0) gram <- "<NA>"
                    ret <- data.frame(gram = gram
-                   , scores = NA, n = 1, stringsAsFactors = F)}, 
-                   ret <- data.frame(gram = "", scores = NA, n = 1, stringsAsFactors = F))
+                   , scores = 0, n = 1, stringsAsFactors = F)}, 
+                   ret <- data.frame(gram = "", scores = 0, n = 1, stringsAsFactors = F))
             ) ) ) )
   names(ret)[3] <- "n"
+  #ret$n <- as.factor(ret$n)
   ret
 }

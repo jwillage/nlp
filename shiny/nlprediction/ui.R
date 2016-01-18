@@ -1,5 +1,6 @@
 library(shiny)
 shinyUI(
+  #TODO add tab
   bootstrapPage(
     useShinyjs(),
     theme = "spacelab.css",
@@ -7,7 +8,7 @@ shinyUI(
 
     h1("Next Word Prediction", align = 'center', class='text-primary'),
     h5(id = "inputBox", "Please wait, loading ...", class='text-warning', align='center'),
-    hidden(div(id = "main", 
+    hidden(div(id = "main", align = "center",
       HTML("<br><br><div align = 'center'>
           <label class='control-label' for='fragment'>Input phrase </label>
           <input type='text' name = 'fragment' style='width:70%'>  &nbsp;&nbsp;&nbsp;<br>
@@ -28,6 +29,7 @@ shinyUI(
         </div>")
     ,h3(textOutput("topPred"), align = "center", class='text-info')
     ,uiOutput("otherPred")
+    ,plotOutput("o", width = "50%", height = "150px")
     ))
 )
 )
