@@ -1,6 +1,9 @@
 library(shiny)
+library(shinyjs)
+
 shinyUI(
   #TODO add tab
+  #give credit for https://bootswatch.com/spacelab/ and ggtheme
   bootstrapPage(
     useShinyjs(),
     theme = "spacelab.css",

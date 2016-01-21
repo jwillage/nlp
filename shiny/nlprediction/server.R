@@ -3,7 +3,8 @@ library(shinyjs)
 library(grid)
 source("predict.R")
 
-#TODO for backoff plots, need to indicate n (by color?)
+#todo remove plot if no results
+#todo add clear button
 shinyServer(
   function(input, output){
     toggle("inputBox")
@@ -29,36 +30,33 @@ shinyServer(
           ret[[i-1]]<-h4(""))
     ret
   })
-  
-  output$o <- renderPlot({
-    
-    plot.new()
-    gl <- grid.layout(1,1)
-    vp.1 <- viewport(layout.pos.col = 1, layout.pos.row = 1, height=unit(.4, "npc"))
-    vp.2 <- viewport(layout.pos.col = 2, layout.pos.row = 1)
-    vp.3 <- viewport(layout.pos.col = 1, layout.pos.row = 2)
-    vp.4 <- viewport(layout.pos.col = 2, layout.pos.row = 2)
-    pushViewport(viewport(layout=gl))
-    
-    pushViewport(vp.1)
-    g<-
-      ggplot(data = pred(), aes(y=runif(nrow(pred()), 0, .5), x = scores, fill=n)) +
-      theme_economist() + 
-      theme(axis.text.y=element_blank(), axis.title.y=element_blank(), 
-            panel.grid.major.y = element_blank(), axis.text=element_text(size=12),
-            axis.title=element_text(size=14)) + 
-      geom_label(aes(label=gram), #size = pred()$n*2,
-                 size = (sqrt(pred()$n)*3) + 2,
-                 alpha=.25) + 
-      labs(aes(size = 5)) +
-      coord_cartesian(ylim = c(-.3,.8)) +
-      guides(fill = F)
-    print(g)#, vp = viewport(height=unit(.5, "npc")))
-    #popViewport()
-    
-   
+
+    output$o <- renderPlot({
+      if (pred()[1, "gram"] != ""){
+      plot.new()
+      gl <- grid.layout(1,1)
+      vp.1 <- viewport(layout.pos.col = 1, layout.pos.row = 1, height=unit(.4, "npc"))
+      vp.2 <- viewport(layout.pos.col = 2, layout.pos.row = 1)
+      vp.3 <- viewport(layout.pos.col = 1, layout.pos.row = 2)
+      vp.4 <- viewport(layout.pos.col = 2, layout.pos.row = 2)
+      pushViewport(viewport(layout=gl))
+      
+      pushViewport(vp.1)
+      g <- ggplot(data = pred(), aes(y=runif(nrow(pred()), 0, .5), x = scores, fill=n)) +
+        theme_economist() + 
+        theme(axis.text.y=element_blank(), axis.title.y=element_blank(), 
+              panel.grid.major.y = element_blank(), axis.text=element_text(size=12),
+              axis.title=element_text(size=14)) + 
+        geom_label(aes(label=gram), #size = pred()$n*2,
+                   size = (sqrt(pred()$n)*3) + 2,
+                   alpha=.25) + 
+        labs(aes(size = 5)) +
+        coord_cartesian(ylim = c(-.3,.8)) +
+        guides(fill = F)
+      print(g)}
   })
   
+
   }
 )
 
