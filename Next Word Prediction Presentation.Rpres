@@ -78,15 +78,14 @@ Using the App
 - When the app is started up, it reads in the models saved as RDS. This should take no more than
 15 seconds, please be patient. When the "Loading" message disappears and you can enter input, 
 the app is ready.
-- After enterting a phrase in the textbox, the user can choose the max results ($k$), and the
+- After entering a phrase in the textbox, the user can choose the max results ($k$), and the
 method of prediction. 
-- Results are displayed with the single most likely prediction on top of the list, in blue. The next
-most likely results, up to $k - 1$ are displayed below that, in decreasing order of likelihood. 
-- Below the results list, a plot is displayed, which shows on a 1-dimensional chart the scores 
-(Freq for backoff, Scores for interpolation) of each result. 
+- Results are displayed with the <a style="color:#3a87ad;">single</a> most likely prediction on top of the list, in blue. The <a style="color:#999999;">next
+most likely</a> results, up to $k - 1$ are displayed below that, in decreasing order of likelihood. 
+- Below the results list, a plot is displayed, which shows a 1-dimensional chart of the scores for each result. 
 - For backoff predictions, results in the plot are sized so that higher order $n$-grams are larger
-(different order models are also different colors). Due to the fact that the app supports multiple
-backoff predictions, we may see lower order results having a higher score (slide 3). 
+and different colors. Due to the fact that the app supports multiple backoff predictions, there may
+be lower order results with a higher score (slide 3). 
 
 
 
