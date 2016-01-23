@@ -1,65 +1,72 @@
 Next Word Prediction 
 ========================================================
-font-family: 'Helvetica'
 Joe Willage &nbsp;&nbsp;  ([@lustyandlewd](http://twitter.com/lustyandlewd))  
 Jan 2016  
 
-Overview:
-
-
-Pre-processing
-========================================================
-- $n$**-gram tokenization**
-  - The raw text is converted to lowercase, and punctuation and whitespace is removed.
-  - The output is fed into a tokenize function, which breaks the text into 
-  1, 2, 3, 4, and 5-gram tokens.
-  
-- **Model Creation**
-  - Each $n$-gram collection is fed into a create model function.
-  - The function filters out unwanted grams, i.e. those containing profanity, numbers, special 
-  characters, etc. Filtering on this level ensure that we don't have incomplete sentences.
-  - The frequency percentage is calculated for each gram using the `table` function. The $n$-gram
-  with the top $5$ frequencies for each $n-1$ index is ordered and saved. This becomes the model.
-
-NLP Algorithms
+Overview and Pitch
 ========================================================
 <style>
-.reveal h1{
-font-size: 30px;
+.reveal li {
+   font-size: 24px;
+   line-height: 120%
 }
-.reveal h5{
-font-size: 22px;
+</style>
+- The **Next Word Prediction** app is a program that uses natural language processing (NLP) to 
+predict a user's next word.
+- The app performs with a relatively high accuracy rate of about 20% for in-sample tests (inputs
+from which it 'learned') and 10% for out-of-sample tests. 
+- Users are given a clean and simple, yet highly performing application. It allows for multiple 
+options in a straightforward design.
+<br><br><img src="cap.png"/>
+
+NLP Algorithms - Stupid Backoff
+========================================================
+<style>
+.reveal li {
+   font-size: 24px;
+   line-height: 120%
 }
 .reveal pre code {
   display: block; padding: 0.5em;
-  font-size: 1.6em;
+  font-size: 2em;
   line-height: 1.1em;
   background-color: white;
   overflow: visible;
   max-height: none;
   word-wrap: normal;
-  font-size:14px;
+  font-size:18px;
 }
 </style>
 
-- **Stupid Backoff**
-  - <h5>In ordinary stupid backoff, input is fed into the highest order model (5-gram). If a prediction
-  is found it is returned. If not, the next highest order model is searched. This process recurses
-  until there is a match. If there is no match by the 2-gram model, the most frequent 1-gram is
-  returned (typically "the").  
-  - <h5>This app returns the top $k$ results, as requested by the user (up to 5). This might span multiple models if the highest order model 
-  doesn't contain $k$ matches. For example, take the phrase "the san antonio" with $k$=5. This 3 word index
-  is found twice in the 4-gram model. To satisfy the remaining 3 predictions, the app returns the 
-  top three results from the 3-gram model. 
-  ```{r echo = F}
-  print(readRDS("/Users/jw186027/Documents/Personal/Analytics/Data Science Coursera/10 - Capstone/data/sb.RDS")[, c(2, 3, 4)], row.names = F)
-  ```
-  Note that the lower order results actually return a higher frequency. But backoff chooses the 
-  higher order, regardless of frequency.
-  - <h5>Part of Speech tagging 
-  
+- In ordinary stupid backoff, input is fed into the highest order model (5-gram). If a prediction
+is found it is returned. If not, the next highest order model is searched. This process recurses
+until there is a match. If there is no match by the 2-gram model, the most frequent 1-gram is
+returned (typically "the").  
+- This app returns the top $k$ results, as requested by the user (up to 5). This might span multiple models if the highest order model 
+doesn't contain $k$ matches. For example, take the phrase "the san antonio" with $k$=5. This phrase 
+is found twice in the 4-gram model. To satisfy the remaining 3 predictions, the app returns results from the 3-gram model. <br><br>
 
-NLP Algorithms (continued)
+<div class="column column1 slideContent">
+<br><br><br><br><br><br><pre><code>
+```{r echo = F}
+print(readRDS("/Users/jw186027/Documents/Personal/Analytics/Data Science Coursera/10 - Capstone/data/sb.RDS")[, c(2, 3, 4)], row.names = F)
+```
+</code></pre>
+<a style="font-size:24px;"> Note that the lower order results actually return a higher frequency. But backoff chooses the higher order, regardless of frequency.</a></div>
+<div class="column column2 slideContent">
+<br><br><br><br><br><br>
+<li> <strong>Part of Speech (POS) tagging</strong> - The training data has had it's POS analyzed, 
+and the most frequent next-word for each POS is aggregated into a model. If no match for the
+input is found, rather than returning "the", the app analyzes the part of speech (POS) of the input's last word and looks it up against the POS model.</li>
+<pre><code>
+``````{r echo=F}
+print(readRDS("/Users/jw186027/Documents/Personal/Analytics/Data Science Coursera/10 - Capstone/model/pos.RDS")[c(8, 10, 11, 12, 13, 24),], row.names=F)
+``````
+</pre></code></div>
+<br><br><br><br>
+
+
+NLP Algorithms - Linear Interpolation
 ========================================================
 - **Linear Interpolation**
   - All available $n$-gram models are utilized to pick the top $k$ most likely words by score.
