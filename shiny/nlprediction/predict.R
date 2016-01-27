@@ -6,10 +6,10 @@ library(plyr)
 library(dplyr)
 library(hashr)
 
-bi.model <- readRDS("model_bi_combined_top5_hash.RDS")
-tri.model <- readRDS("model_tri_combined_top5_hash.RDS")
-quad.model <- readRDS("model_quad_combined_top5_hash.RDS")
-quint.model <- readRDS("model_quint_combined_top5_hash.RDS")
+bi.model.hash <- readRDS("model_bi_combined_top5_hash.RDS")
+tri.model.hash <- readRDS("model_tri_combined_top5_hash.RDS")
+quad.model.hash <- readRDS("model_quad_combined_top5_hash.RDS")
+quint.model.hash <- readRDS("model_quint_combined_top5_hash.RDS")
 unigrams <- readRDS("unigram_tf.s.RDS")
 pos <- readRDS("pos.RDS")
 
@@ -18,15 +18,15 @@ wta <- Maxent_Word_Token_Annotator()
 pta <- Maxent_POS_Tag_Annotator()
 
 #TODO combine if chains from both predict functions. accept list of models and loop through
-
+#TODO does interpolation need to match highest order ngram? Can it search all models and aggregate?
 cleanInput <- function(phrase){
   library(quanteda)
   paste(gsub("'", "", tokenize(toLower(phrase), removePunct = T, removeSeparators = T, 
                          concatenator = " ", ngrams = 1)[[1]], fixed = T), collapse = " ")
 }
 
-stupidBackoff <- function(phrase, hash = F, top = 1, bi.model = model.bi.k5, tri.model = model.tri.k5, 
-                          quad.model = model.quad.k5, quint.model = model.quint.k5){
+stupidBackoff <- function(phrase, hash = F, top = 1, bi.model = bi.model.hash, tri.model = tri.model.hash, 
+                          quad.model = quad.model.hash, quint.model = quint.model.hash){
   phrase <- strsplit(phrase, " ")[[1]]; p <- NULL
   len <- length(phrase)
   bi <- data.frame(); tri <- data.frame(); quad <- data.frame(); quint <- data.frame();
@@ -138,6 +138,82 @@ simpleInterpolation <- function(phrase, lambda = 0.4, top = 1, hash = F, bi.mode
                    , scores = 0, n = 1, stringsAsFactors = F)}, 
                    ret <- data.frame(gram = "", scores = 0, n = 1, stringsAsFactors = F))
             ) ) ) )
+  names(ret)[3] <- "n"
+  #ret$n <- as.factor(ret$n)
+  ret
+}
+
+simpleInterpolation2 <- function(phrase, lambda = 0.4, top = 1, hash = F, bi.model = model.bi.k5, 
+                                tri.model = model.tri.k5, quad.model = model.quad.k5, 
+                                quint.model = model.quint.k5){
+  score <- function(modelResult, modelList){
+    #unigram list is mandatory. further interpolation option but models need to be in asc n order
+    
+    gram <- modelResult$gram
+    scores <- list(); ret <- list();
+    
+    scores[[1]] <- modelList[[1]][order(modelList[[1]]$abs, decreasing = T), ][1:5,]
+    scores[[1]] <- data.frame(Freq = scores[[1]]$Freq, gram = scores[[1]]$gram, 
+                              scores = scores[[1]]$Freq * lambda^((length(modelList))+1), 
+                              stringsAsFactors = F)
+    ##above ok, need to change alpha because "the" always going to win
+    if(length(modelList) > 1)
+      for(i in 2 : (length(modelList))){
+        p <- paste(phrase[(len-(i-2)):len], collapse = " ")
+        scores[[length(scores) + 1]] <- modelList[[i]][modelList[[i]]$idx == ifelse(hash, hash(p), p), 
+                                                       c("Freq", "gram")]
+        scores[[length(scores)]]$scores <- scores[[length(scores)]]$Freq * 
+          (lambda^(length(modelList)+1-i))
+      }
+    
+    scores[[length(scores) + 1]] <- data.frame(Freq = modelResult$Freq, gram = modelResult$gram, scores = modelResult$Freq)
+    scores <- rbind.fill(scores)
+    scores <- setNames(aggregate(scores$scores, by = list(scores$gram), sum), c("gram", "scores"))
+    scores[order(scores$scores, decreasing = T), ][1:top,]
+  }
+  
+  phrase <- strsplit(phrase, " ")[[1]]
+  len <- length(phrase)
+  bi <- NULL; tri <- NULL; quad <- NULL; quint <- NULL;
+  if (len >= 1){ 
+    p <- paste(phrase[len], collapse = " ")
+    bi <- bi.model[bi.model$idx == ifelse(hash, hash(p), p), ]
+    if (nrow(bi) == 0) bi <- NULL
+  }
+  if (len >= 2){
+    p <- paste(phrase[(len - 1) : len], collapse = " ")
+    tri <- tri.model[tri.model$idx == ifelse(hash, hash(p), p), ]
+    if (nrow(tri) == 0) tri <- NULL 
+  }
+  if (len >= 3){
+    p <- paste(phrase[(len - 2) : len], collapse = " ")
+    quad <- quad.model[quad.model$idx == ifelse(hash, hash(p), p), ]
+    if (nrow(quad) == 0) quad <- NULL
+  }
+  if (len >= 4){
+    p <- paste(phrase[(len - 3) : len], collapse = " ")
+    quint<- quint.model[quint.model$idx == ifelse(hash, hash(p), p), ]
+    if (nrow(quint) == 0) quint <- NULL
+  }
+  
+  ret <- NULL
+  #add any supplmental info ie score, which gram won, etc.
+  ifelse(!is.null(quint),
+         ret <- cbind(score(quint, list(unigrams, bi.model, tri.model, quad.model)), 5),
+         ifelse(!is.null(quad),
+                ret <- cbind(score(quad, list(unigrams, bi.model, tri.model)), 4),
+                ifelse(!is.null(tri),
+                       ret <- cbind(score(tri, list(unigrams, bi.model)), 3),
+                       ifelse(!is.null(bi),
+                              ret <- cbind(score(bi, list(unigrams)), 2),
+                              ifelse(len > 0, {
+                                gram <- pos[pos$pos == NLP::annotate(phrase[len], pta, NLP::annotate(phrase[len], 
+                                                                                                     list(sta, wta)))[2]$features[[1]][[1]], "pred"]
+                                if(length(gram) == 0) gram <- "<NA>"
+                                ret <- data.frame(gram = gram
+                                                  , scores = 0, n = 1, stringsAsFactors = F)}, 
+                                ret <- data.frame(gram = "", scores = 0, n = 1, stringsAsFactors = F))
+                       ) ) ) )
   names(ret)[3] <- "n"
   #ret$n <- as.factor(ret$n)
   ret

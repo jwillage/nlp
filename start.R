@@ -4,273 +4,209 @@ library(plyr)
 library(quanteda)
 library(jsonlite)
 library(data.table)
+library(openNLP)
+library(NLP)
+
+createModel <- function(tok, n, k = 1){
+  #    Builds a frequency-based model from a list of n-grams
+  #    
+  #    Args:
+  #      tok:  A list of tokenized text. Can accept a list of lists, ie multiple corpora in different
+  #            slots.
+  #      n:    Length of the grams, the n in the n-gram.
+  #      k:    Number of grams to keep per index. 
+  #      
+  #    Returns:
+  #      A lookup table model containing the index, predicted gram, and frequency of the gram in the 
+  #      input corpus
+  
+  tok <- unlist(tok)
+  len <- length(tok)
+  tok <- gsub("'", "", unlist(tok), fixed = TRUE)
+  
+  # Precision needs to increase from 8 as tok grows. Needs to capture precision up to 1/length(tok)
+  freq <- table(tok)
+  df <- as.data.table(round(freq/len, 8), row.names = NULL, stringsAsFactors = FALSE)
+  df$absolute <- freq
+  rm(freq)
+  
+  # Remove grams with words that appear in the profrane list
+  link <- paste0("https://github.com/shutterstock/",
+                 "List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words/raw/master/en")
+  sw <- paste0("(([^a-z]+|^)(", paste(readLines(link), sep = "", collapse = "|"), ")([^a-z]+|$))")
+  # Remove grams with profanity within the word
+  sw <- paste0(sw, "|", paste0(readLines("stop.txt"), sep = "", collapse = "|"))
+  # Remove grams with numbers, #hashtags, @mentions, and remaining special characters
+  sw <- paste0(sw, "|[0-9]|[#@_]")
+  
+  bad <- grep(sw, df$tok, perl = TRUE)
+  if(length(bad) > 0 ) df <- df[-bad,]
+  
+  split <- strsplit(df$tok, " ")
+  df$idx <- sapply(split, function(x) paste(x[1:n - 1], collapse = " "))
+  df$gram <- sapply(split, function(x) x[n])
+  
+  # Keep top k predictions
+  model <- df[df[, .I[order(N, decreasing = TRUE)[1:k]], by = idx]$V1, 
+              c("idx", "gram", "N", "absolute"), with = FALSE]
+  
+  model[complete.cases(model), ]
+}
+
+combineModels <- function(model, k = 1){
+  #    Aggregates multiple models, useful for building models over different corpora
+  #    
+  #    Args:
+  #      model: A list of models
+  #      k:     Number of grams to keep per index. 
+  #
+  #    Returns:
+  #      A model in the same structure as those passed in, aggregated by top k grams per index
+  
+  model <- as.data.table(rbind.fill(model))
+  merged <- model[model[, .I[order(N, decreasing = TRUE)], by = idx]$V1, 
+                  c("idx", "gram", "N", "absolute"), with = FALSE]
+  merged
+}
+
+posModel <- function(model.bi){
+  #    Create a model whose indices are parts of speech and includes the next most likely word
+  #    
+  #    Args:
+  #      model.bi: Bigram model
+  #
+  #    Returns:
+  #      A data.table model indexed by POS, containing most likely next word
+  
+  sta <- Maxent_Sent_Token_Annotator()
+  wta <- Maxent_Word_Token_Annotator()
+  pta <- Maxent_POS_Tag_Annotator()
+  
+  # Resource problems when running in entirety. Break up into ~100k chunks
+  y1 <- annotate(model.bi$idx, list(sta, wta))
+  y2 <- annotate(model.bi$idx, pta, y1)
+  y2w <- subset(y2, type == "word")
+  model.bi$pos <- sapply(y2w$features, '[[', "POS")
+  lookup <- as.data.table(aggregate(model.bi$abs, by = list(model.bi$pos, model.bi$gram), sum))
+  model <- lookup[lookup[, .I[order(x, decreasing = TRUE)[1]], by = Group.1]$V1, 
+                      c("Group.1", "Group.2"), with = FALSE]
+  setnames(model, c("pos", "pred"))
+  model
+}
+
+createSample <- function(samp){
+  #    Create a set of tests and answers to evaluate prediction algorithms
+  #    
+  #    Args:
+  #      samp:  a character array of phrases to turn into tests
+  #
+  #    Returns:
+  #      A two element list containing a character vector of tests and a character vector of answers
+  
+  ret <- list()
+  ret[["test"]] <- sapply(strsplit(samp, ' '), 
+                              function(x) paste(x[1:(length(x) - 1)], collapse = " "))
+  ret[["answer"]] <- sapply(strsplit(samp, ' '), 
+                                function(x) paste(x[length(x)], collapse = " "))
+  ret[["answer"]] <- as.character(tokenize(toLower(ret[[2]]), removePunct = TRUE, 
+                                  removeSeparators = TRUE))
+  na <- which(ret[["answer"]] == 'character(0)')
+  ret[["test"]] <- ret[["test"]][-na]
+  ret[["answer"]] <- ret[["answer"]][-na]
+  ret
+}
+
+getNPRText <- function(numResults, key){
+  #    Make call to NPR's Story API to retrieve paragraphs of text
+  #    
+  #    Args:
+  #      numResults:  Total number of paragraphs to pull back
+  #      key:         Private NPR API key
+  #
+  #    Returns:
+  #      A character vector of paragraphs from NPR stories
+  
+  npr.text <- NULL
+  url1 <- paste0("http://api.npr.org/query?id=1007,3&numResults=20&output=JSON&apiKey=", key)
+  # NPR API max results = 20
+  i <- 0
+  while(length(npr.text) < numResults){
+    url2 <- paste0(url1, "&startNum=", (20 * i) + 1)
+    npr.json <- fromJSON(url2)
+    for (j in 1:length(npr.json$list$story$text$paragraph)){
+      if(nrow(npr.json$list$story$text$paragraph[[j]]) < 2) next()
+      u <- unclass(npr.json$list$story$text$paragraph[[j]]$`$text`)
+      npr.text <- append(npr.text, u[1:length(u) - 1])
+    }
+    i <- i + 1
+  }
+  
+  npr.text[1:numResults]
+}
+
+testAlgorithm <- function(samp, alg, ...){
+  #    Test algorithm and compare results to samples
+  #    
+  #    Args:
+  #      samp: Output of createSample, or similar structure (a 2 element list containing tests and 
+  #            answers, respectively)
+  #      alg:  Vectorized function containing algorithm
+  #      ...:  Further arguments passed to algorithm
+  #    Returns:
+  #      The percentage of answers the algorithm correctly predicted
+
+  pred <- alg(cleanInput(samp[[1]]), ...)
+  pred <- unlist(t(pred)[, 2])
+  
+  comp <- cbind(samp[[2]], pred)
+  c(paste0(sum(comp[, 1] == comp[, 2]), "/", nrow(comp)), 
+    paste0(round(sum(comp[, 1] == comp[, 2])/nrow(comp) * 100, 4), "%"))
+}
 
 fn <- "data/Coursera-SwiftKey.zip"
 download.file("https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
               , fn)
-l <- unzip(fn, list = T)
+l <- unzip(fn, list = TRUE)
 
-# #work with text documents in list format
 tmp <- list()
-#for (i in l$Name[grep("US.*txt", l$Name)])
 for (i in l$Name)
   tmp[[length(tmp) + 1]] <- readLines(unz("data/Coursera-SwiftKey.zip", i))
 tmp <- setNames(tmp, gsub(".txt", "" ,gsub(".*/.*/", "", l$Name[grep("txt", l$Name)])))
-saveRDS(tmp, "data/readLines_list_allFiles.RDS")
 
 en <- list()
 en[["twitter"]] <- tmp[[7]]; en[["news"]] <- tmp[[8]]; en[["blogs"]] <- tmp[[9]];
-rm(tmp)
 
-#break up sentences by period, only for news. TODO blogs and twitter have less reliable breaks
+#break up news sentences by period. blogs and twitter have less reliable breaks
 en[["news"]] <- unlist(stri_split_boundaries(en[["news"]], type = "sentence", 
-                                             skip_sentence_sep = T))
-saveRDS(en, "data/readLines_list_all_EN.RDS")
-
+                                             skip_sentence_sep = TRUE))
 corp <- lapply(en, corpus)
-rm(en)
 
-#build n-grams
-unigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = T, removeSeparators = T, 
+#TODO loop through gram creation
+unigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = TRUE, removeSeparators = TRUE, 
                                              concatenator = " ", ngrams = 1))
-unigram.samp.100000 <- lapply(unigram, sample, 100000)
-bigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = T, removeSeparators = T, 
+bigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = TRUE, removeSeparators = TRUE, 
                                             concatenator = " ", ngrams = 2))
-bigram.samp.100000 <- lapply(bigram, sample, 100000)
-trigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = T, removeSeparators = T, 
+trigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = TRUE, removeSeparators = TRUE, 
                                             concatenator = " ", ngrams = 3))
-trigram.samp.100000 <- lapply(trigram, sample, 100000)
-quadgram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = T, removeSeparators = T, 
-                                concatenator = " ", ngrams = 4))
-quadgram.samp.100000 <- lapply(quadgram, sample, 100000)
-rm(corp)
+quadgram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = TRUE, removeSeparators = TRUE, 
+                                            concatenator = " ", ngrams = 4))
+quintgram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = TRUE, removeSeparators = TRUE, 
+                                            concatenator = " ", ngrams = 5))
 
+model.bi <- createModel(bigram, n = 2, k = 5)
+model.bi.hash <- model.bi
+model.bi.hash$idx <- as.integer(hashr::hash(model.bi.hash$idx))
 
-#handle twitter mentions. otherwise replace @ with "at"
-#twitter hashtag removal. just remove octothorpe if it at the end of a tweet, otherwise,  gaps
+samp.in <- createSample(unlist(lapply(r, sample, 1000))) #en
+samp.out <- createSample(getNPRText(3000, readLines("test/npr.key")))
 
-createModel <- function(gram, n, k = 1){
-  #gram is the list of grams. n as in n-gram. k is the number of options to keep
-  print(paste(timestamp(quiet = T), "create model begin"))
-  gram <- unlist(gram)
-  len <- length(gram)
-  
-  #filter out apostrophes
-  print(paste(timestamp(quiet = T), "filtering apostrophes"))
-  gram <- gsub("'", "", unlist(gram), fixed = T, perl = T)
-  #make sure rownames are not taking up space, else set to NULL
-  
-  #rounding to 8 works for sample, may need to increase precision for larger corpora
-  #ie length of samp[[1]] == 114293. 1/114293 = 8.7e-6. can round after that (keep 2 extra JICOC)
-  print(paste(timestamp(quiet = T), "creating freq table"))
-  f<- table(gram)
-  rf <- round(f/len, 8)
-  tf <- as.data.frame(rf, row.names = NULL, stringsAsFactors = F)
-  tf$abs <- f
-  rm(f); rm(rf);
-  
-  print(paste(timestamp(quiet = T), "gram filtering"))
-  #remove grams with words that appear in the profrane list
-  sw <- paste0("(([^a-z]+|^)(", 
-               paste(readLines(paste0("https://github.com/shutterstock/",
-                                      "List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words/raw/master/en")
-               ), sep = "", collapse = "|")
-               , ")([^a-z]+|$))")
-  #remove grams with profanity within the word
-  sw <- paste0(sw, "|", paste0(readLines("stop.txt"), sep = "", collapse = "|"))
-  #remove grams with numbers
-  sw <- paste0(sw, "|[0-9]")
-  #remove grams with #hashtags and @mentions
-  sw <- paste0(sw, "|[#@]")
-  #remove grams with remaining special chars
-  sw <- paste0(sw, "|_")
-  
-  idx <- grep(sw, tf$gram, perl = TRUE)
-  if (length(idx) == 0) tf.s <- tf
-  if (length(idx) > 0) tf.s <- tf[-idx, ]
-  rm(tf);  rm(sw);
+cleanInput <- Vectorize(cleanInput)
+testAlgorithm(samp.in, Vectorize(stupidBackoff), hash = TRUE)
 
-  #Indexing. For bigrams, only take [1] the first word to index. n>2,combine 1:n-1 to a single idx
-  print(paste(timestamp(quiet = T), "index unlisting"))
-  t <- unlist(lapply(strsplit(tf.s$gram, " "), function(x) x[1:n-1]))
-  print(paste(timestamp(quiet = T), "index subsetting"))
-  #needs to be on unlisted and 1 big blob of text
-  p <- t[seq(1, length(t), by = n - 1)]
-  #process additional grams if n > 2
-  print(paste(timestamp(quiet = T), "index additional grams"))
-  if (n > 2)  for(j in 2:(n - 1))  p <- paste(p, t[seq(j, length(t), by = n - 1)])
-  tf.s$idx <- p
-  tf.s <- as.data.table(tf.s)
-  
-  #keep top k predictions
-  model <- as.data.frame(tf.s[tf.s[, .I[order(Freq, decreasing = T)[1:k]], by = idx]$V1])
-  model <- model[complete.cases(model),]
-  
-  #remove first n-1 grams and keep only the term to predict
-  print(paste(timestamp(quiet = T), "model unlisting"))
-  model$gram <- unlist(lapply(strsplit(model$gram, " "), function(x) unclass(x)[n]))
-  rm(gram); rm(tf.s); 
-  
-  model
-}
- 
-combineModels <- function(model){
-  print(paste(timestamp(quiet = T), "rbind list"))
-  model <- rbind.fill(model)
-  
-  print(paste(timestamp(quiet = T), "aggregate"))
-  lookup <- setNames(aggregate(model$abs, by = list(model$idx), max), c("idx", "maxAbs"))
-  
-  print(paste(timestamp(quiet = T), "merge final"))
-  final <- merge(lookup, model, by.x = c("idx", "maxAbs"), by.y = c("idx", "abs"))
- 
-  print(paste(timestamp(quiet = T), "model remove dups"))
-  final <- final[!duplicated(final$idx), ]
-  
-  #add freq in the return
-  #final[, c("idx", "x")]
-  final
-}
-
-#bigram.model.samp <- createModel(bigram.samp.100000, 2)
-#trigram.model.samp <- createModel(trigram.samp.100000, 3)
-#quad.model.samp <- createModel(quadgram.samp.100000, 4)
-quad.5 <-createModel(readRDS("data/quadgram_EN_samp_100000.RDS"), 4, 5)
-
-
-stupidBackoff <- function(phrase){
-  phrase <- strsplit(phrase, " ")[[1]]
-  len <- length(phrase)
-  bi <- NULL; tri <- NULL; quad <- NULL;
-  if (len >= 1) 
-    bi <- bigram.model.samp[bigram.model.samp$idx == 
-                              paste(phrase[len], collapse = " "), ]
-  if (len >= 2)
-    tri <- trigram.model.samp[trigram.model.samp$idx == 
-                                paste(phrase[(len - 1) : len], collapse = " "), ]
-  if (len >= 3)
-    quad <- quad.model.samp[quad.model.samp$idx == 
-                              paste(phrase[(len - 2) : len], collapse = " "), ]
-  
-  ifelse (c(length(quad$gram) > 0, length(quad$gram) > 0), c(quad$gram, 4), 
-          ifelse (c(length(tri$gram) > 0, length(tri$gram) > 0), c(tri$gram, 3), 
-                  ifelse (c(length(bi$gram) > 0, length(bi$gram) > 0), c(bi$gram, 2),
-                          #                     #Implement POS tagger
-                          c("the", 1)
-                  )))
-}
-
-stupidBackoffCombined <- function(phrase){
-  phrase <- strsplit(phrase, " ")[[1]]
-  len <- length(phrase)
-  bi <- NULL; tri <- NULL; quad <- NULL;
-  if (len >= 1) 
-    bi <- bigram.model.sing[bigram.model.sing$idx == 
-                              paste(phrase[len], collapse = " "), ]
-  if (len >= 2)
-    tri <- trigram.model.sing[trigram.model.sing$idx == 
-                                paste(phrase[(len - 1) : len], collapse = " "), ]
-  if (len >= 3)
-    quad <- quadgram.model.sing[quadgram.model.sing$idx == 
-                                  paste(phrase[(len - 2) : len], collapse = " "), ]
-  
-  ifelse (c(length(quad$gram) > 0, length(quad$gram) > 0), c(quad$gram, 4), 
-          ifelse (c(length(tri$gram) > 0, length(tri$gram) > 0), c(tri$gram, 3), 
-                  ifelse (c(length(bi$gram) > 0, length(bi$gram) > 0), c(bi$gram, 2),
-                          #                     #Implement POS tagger
-                          c("the", 1)
-                  )))
-}
-
-cleanInput <- function(phrase){
-  paste(gsub("'", "", tokenize(toLower(phrase), removePunct = T, removeSeparators = T, 
-                               concatenator = " ", ngrams = 1)[[1]], fixed = T), collapse = " ")
-}
-
-#in sample test set
-r <- readRDS("data/readLines_list_all_EN.RDS")
-is <- unlist(lapply(r, sample, 1000))
-saveRDS(is, "data/test_3000.RDS")
-ist <- lapply(strsplit(is, ' '), function(x) paste(x[1 : (length(x)-1)], collapse = " "))
-isa <- sapply(strsplit(is, ' '), function(x) paste(x[length(x)], collapse = " "))
-isa <- tokenize(toLower(isa), removePunct = T, removeSeparators = T)
-
-#out of sample test set
-npr.text <- NULL
-for (i in 0:11){
-  url2 <- paste0("http://api.npr.org/query?id=1007,3&numResults=20&output=JSON&startNum=", (20*i)+1,
-                 "&apiKey=", readLines("test/npr.key"))
-  npr.json <- fromJSON(url2)
-  for (j in 1: length(npr.json$list$story$text$paragraph)){
-    if(nrow(npr.json$list$story$text$paragraph[[j]]) > 1){
-      u <- unclass(npr.json$list$story$text$paragraph[[j]]$`$text`)
-      npr.text [[220 + j]] <- u[1:(length(u) -1)]
-    }
-  }
-}
-npr.text <- unlist(npr.text)[1:3000]
-ost <- lapply(strsplit(npr.text, ' '), function(x) paste(x[1 : (length(x)-1)], collapse = " "))
-osa <- sapply(strsplit(npr.text, ' '), function(x) paste(x[length(x)], collapse = " "))
-osa <- tokenize(toLower(osa), removePunct = T, removeSeparators = T)
-
-#predict and compare
-pred <- lapply(ost, function(x) stupidBackoff(cleanInput(x)))
-comp <- NULL
-for(i in 1 : length(pred))  
-  comp <- rbind(comp, c(ifelse(length(osa[[i]] > 0), osa[[i]], "<NA>"), pred[[i]]))
-
-NAs <- sum(comp[,1] == "<NA>")
-len <- nrow(comp) - NAs
-c(paste0(sum(comp[,1] == comp[,2]), "/", len), 
-  paste0(round(sum(comp[,1] == comp[,2])/len*100, 4), "%"))
-
-#mini samples
-ost.1000 <- head(ost, 1000)
-osa.1000 <- head(osa, 1000)
-for (i in 1:length(osa.1000)) if(length(osa.1000[[i]]) == 0) osa.1000[[i]] = "<NA>"
-pred.1000 <- lapply(ost.1000, function(x) 
-  stupidBackoff(cleanInput(x), bigram.model.sing, trigram.model.sing, quadgram.model.sing))
-pred.a1 <- lapply(ost.1000, function(x) 
-  stupidBackoff(cleanInput(x), bigram.model.sing, trigram.model.sing, A1))
-#etc
-
-c(paste0(sum(comp.a1[,1] == comp.a1[,2]), "/", len), 
-  paste0(round(sum(comp.a1[,1] == comp.a1[,2])/len*100, 4), "%"))
-
-
-#POS tagging and MLE
-l <- NULL
-for (i in 1:19){
-  print(i)
-  s <- tf.s$idx[(i*100000): (i * 100000 + 99999)]
-  print(system.time(y1 <- annotate(s, list(sent_token_annotator, word_token_annotator))))
-  print(system.time(y2 <- annotate(s, pos_tag_annotator, y1)))
-  l[[i+1]] <- y2
-}
-
-tf.sub$pos <- l; tf.sub$pred <- unlist(lapply(strsplit(tf.sub$gram, " "), function(x) x[2]))
-lookup <- aggregate(tf.sub$abs, by = list(tf.sub$pos, tf.sub$pred), sum)
-c <- aggregate(lookup$x, by = list(lookup$Group.1), max)
-pos <- merge(lookup, c)
-pos <- pos[!duplicated(pos$Group.1), c("Group.1", "Group.2")]
-names(pos) <- c("pos", "pred")
-
-#create hash-based models. 
-model.tri.hash <- trigram.model.sing[, c(1, 3)]
-model.tri.hash$idx <- as.integer(hash(model.tri.hash$idx))
-
-model.tri.top5.hash <- model.tri.k5[, c("idx", "gram", "Freq")]
-model.tri.top5.hash$idx <- as.integer(hash(model.tri.top5.hash$idx))
-
-
-
-#consider using unigrams from news dataset as a dictionary. combine that with a frequency threshold
-#so things high frequency internet slang doesn't get filtered out. 
+#TODO
 #OOV: report back for the tests that were correct, what is the frequency of the gram? 
-#want to elminiate low freq words with <unk>
+#want to elminiate low freq words with <unk>. retrain data. tokenize user input and check to make
+#sure all words found in unigram model. if not, replace with <unk> and then run algo.
 
-#convert @ to "at", other misc cleanup, ie "**text**
-
-#space permitting, create models with larger k. that means for quad matches, gives tris more opptys
-#to hit, else they get a score of 0
-
+#convert @ to "at", other misc cleanup, ie "**text** handle twitter mentions. 
+#twitter hashtag removal. just remove octothorpe if it at the end of a tweet, otherwise,  gaps
