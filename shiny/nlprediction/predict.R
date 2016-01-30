@@ -5,6 +5,9 @@ library(NLP)
 library(plyr)
 library(dplyr)
 library(hashr)
+library(quanteda)
+
+#TODO combine if chains from both predict functions. accept list of models and loop through
 
 bi.model.hash <- readRDS("model_bi_combined_top5_hash.RDS")
 tri.model.hash <- readRDS("model_tri_combined_top5_hash.RDS")
@@ -17,57 +20,70 @@ sta <- Maxent_Sent_Token_Annotator()
 wta <- Maxent_Word_Token_Annotator()
 pta <- Maxent_POS_Tag_Annotator()
 
-#TODO combine if chains from both predict functions. accept list of models and loop through
-#TODO does interpolation need to match highest order ngram? Can it search all models and aggregate?
 cleanInput <- function(phrase){
-  library(quanteda)
-  paste(gsub("'", "", tokenize(toLower(phrase), removePunct = T, removeSeparators = T, 
-                         concatenator = " ", ngrams = 1)[[1]], fixed = T), collapse = " ")
+  #    Clean user input to match model
+  #    
+  #    Args:
+  #      phrase: Character vector of raw user input
+  #      
+  #    Returns:
+  #      A cleaned character vector, with punctuation, whitespace, and apostrophes removed
+  
+  paste(gsub("'", "", tokenize(toLower(phrase), removePunct = TRUE, removeSeparators = TRUE, 
+                         concatenator = " ", ngrams = 1)[[1]], fixed = TRUE), collapse = " ")
 }
 
-stupidBackoff <- function(phrase, hash = F, top = 1, bi.model = bi.model.hash, tri.model = tri.model.hash, 
-                          quad.model = quad.model.hash, quint.model = quint.model.hash){
-  phrase <- strsplit(phrase, " ")[[1]]; p <- NULL
-  len <- length(phrase)
-  bi <- data.frame(); tri <- data.frame(); quad <- data.frame(); quint <- data.frame();
-
-  if (len >= 1){
-    p <- paste(phrase[len], collapse = " ")
-    bi <- bi.model[bi.model$idx ==  ifelse(hash, hash(p), p), ]
-    if (nrow(bi) > 0) bi$n <- 2}
-  if (len >= 2){
-    p <- paste(phrase[(len - 1) : len], collapse = " ")
-    tri <- tri.model[tri.model$idx == ifelse(hash, hash(p), p), ]
-    if (nrow(tri) >0) tri$n <- 3}
-  if (len >= 3){
-    p <- paste(phrase[(len - 2) : len], collapse = " ")
-    quad <- quad.model[quad.model$idx ==  ifelse(hash, hash(p), p), ]
-    if (nrow(quad) >0)  quad$n <- 4}
-  if (len >= 4){
-    p <- paste(phrase[(len - 3) : len], collapse = " ")
-    quint <- quint.model[quint.model$idx ==  ifelse(hash, hash(p), p), ]
-    if (nrow(quint) >0) quint$n <- 5}
+stupidBackoff <- function(phrase, hash = FALSE, top = 1, bi.model = bi.model.hash, 
+                          tri.model = tri.model.hash, quad.model = quad.model.hash, 
+                          quint.model = quint.model.hash, modelList){
+  #    Clean user input to match model
+  #    
+  #    Args:
+  #      phrase: Character vector of raw user input
+  #      
+  #    Returns:
+  #      A cleaned character vector, with punctuation, whitespace, and apostrophes removed
   
-  ret <- NULL
-  ret <- rbind(quint, quad, tri, bi)
-  ret <- ret[!duplicated(ret$gram),]
+  phrase <- strsplit(phrase, " ")[[1]]
+  p <- NULL
+  len <- length(phrase)
+  grams <- replicate(length(modelList), data.frame())
+
+  for (i in 1:length(modelList)){
+    if (len >= i){
+      p <- paste(phrase[(len - (i - 1)):len], collapse = " ")
+      grams[[i]] <- modelList[[i]][modelList[[i]]$idx == ifelse(hash, hash(p), p), ]
+      if (nrow(grams[[i]]) > 0) grams[[i]]$n <- i + 1
+    }
+  }
+  
+  ret <- rbind.fill(grams)
+  ret <- ret[!duplicated(ret$gram), ]
   ret$scores <- ret$Freq
-  #ret$n <- as.factor(ret$n)
   if (nrow(ret) > 0)
-    return(ret[order(ret$n,ret$Freq, decreasing = T),][1:top,])
+    return(ret[order(ret$n, ret$Freq, decreasing = TRUE), ][1:top, ])
 
   ifelse(length(phrase) > 0, 
-    ret<-data.frame(idx = "POS", gram = pos[pos$pos == NLP::annotate(phrase[len], pta, NLP::annotate(phrase[len], 
-                                                       list(sta, wta)))[2]$features[[1]][[1]], "pred"], 
-               freq = 0, n = 1, scores =0, stringsAsFactors = F), 
-    ret<-data.frame(idx = "", gram = "", freq = 0,n = 1, scores =0, stringsAsFactors = F))
+    ret <- data.frame(idx = "POS", 
+                      gram = pos[pos$pos == NLP::annotate(phrase[len], pta, 
+                                                          NLP::annotate(phrase[len], 
+                                                                        list(sta, wta)))[2]
+                                            $features[[1]][[1]], 
+                                 "pred"], 
+                      freq = 0, n = 1, scores = 0, stringsAsFactors = FALSE), 
+    ret <- data.frame(idx = "", gram = "", freq = 0, n = 1, scores = 0, stringsAsFactors = FALSE)
+  )
+  
   ret
 }
 
-#consider including weighted top trigram etc options that do not match with quadgram 
 simpleInterpolation <- function(phrase, lambda = 0.4, top = 1, hash = F, bi.model = model.bi.k5, 
                                 tri.model = model.tri.k5, quad.model = model.quad.k5, 
                                 quint.model = model.quint.k5){
+  ##consider including weighted top trigram etc options that do not match with quadgram 
+  #
+  #
+  #
   score <- function(modelResult, modelList){
     #unigram list is mandatory. further interpolation option but models need to be in asc n order
     
