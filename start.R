@@ -1,5 +1,3 @@
-library(tm)
-library(Matrix)
 library(plyr)
 library(quanteda)
 library(jsonlite)
@@ -19,6 +17,9 @@ createModel <- function(tok, n, k = 1){
   #    Returns:
   #      A lookup table model containing the index, predicted gram, and frequency of the gram in the 
   #      input corpus
+  #
+  #    TODO:
+  #      Implement OOV - replace low freq words with <unk> token
   
   tok <- unlist(tok)
   len <- length(tok)
@@ -40,7 +41,7 @@ createModel <- function(tok, n, k = 1){
   sw <- paste0(sw, "|[0-9]|[#@_]")
   
   bad <- grep(sw, df$tok, perl = TRUE)
-  if(length(bad) > 0 ) df <- df[-bad,]
+  if(length(bad) > 0 ) df <- df[-bad, ]
   
   split <- strsplit(df$tok, " ")
   df$idx <- sapply(split, function(x) paste(x[1:n - 1], collapse = " "))
@@ -64,9 +65,10 @@ combineModels <- function(model, k = 1){
   #      A model in the same structure as those passed in, aggregated by top k grams per index
   
   model <- as.data.table(rbind.fill(model))
-  merged <- model[model[, .I[order(N, decreasing = TRUE)], by = idx]$V1, 
+  merged <- model[model[, .I[order(N, decreasing = TRUE)[1:k]], by = idx]$V1, 
                   c("idx", "gram", "N", "absolute"), with = FALSE]
-  merged
+  
+  merged[complete.cases(merged), ]
 }
 
 posModel <- function(model.bi){
@@ -91,6 +93,7 @@ posModel <- function(model.bi){
   model <- lookup[lookup[, .I[order(x, decreasing = TRUE)[1]], by = Group.1]$V1, 
                       c("Group.1", "Group.2"), with = FALSE]
   setnames(model, c("pos", "pred"))
+  
   model
 }
 
@@ -110,9 +113,13 @@ createSample <- function(samp){
                                 function(x) paste(x[length(x)], collapse = " "))
   ret[["answer"]] <- as.character(tokenize(toLower(ret[[2]]), removePunct = TRUE, 
                                   removeSeparators = TRUE))
+  
   na <- which(ret[["answer"]] == 'character(0)')
-  ret[["test"]] <- ret[["test"]][-na]
-  ret[["answer"]] <- ret[["answer"]][-na]
+  if (length(na) > 0){
+    ret[["test"]] <- ret[["test"]][-na]
+    ret[["answer"]] <- ret[["answer"]][-na]
+  }
+  
   ret
 }
 
@@ -152,6 +159,7 @@ testAlgorithm <- function(samp, alg, ...){
   #            answers, respectively)
   #      alg:  Vectorized function containing algorithm
   #      ...:  Further arguments passed to algorithm
+  #
   #    Returns:
   #      The percentage of answers the algorithm correctly predicted
 
@@ -171,42 +179,35 @@ l <- unzip(fn, list = TRUE)
 tmp <- list()
 for (i in l$Name)
   tmp[[length(tmp) + 1]] <- readLines(unz("data/Coursera-SwiftKey.zip", i))
-tmp <- setNames(tmp, gsub(".txt", "" ,gsub(".*/.*/", "", l$Name[grep("txt", l$Name)])))
+tmp <- setNames(tmp, gsub(".txt", "" , gsub(".*/.*/", "", l$Name[grep("txt", l$Name)])))
 
 en <- list()
 en[["twitter"]] <- tmp[[7]]; en[["news"]] <- tmp[[8]]; en[["blogs"]] <- tmp[[9]];
+rm(tmp)
 
-#break up news sentences by period. blogs and twitter have less reliable breaks
+#news sentences are broken up by period. blogs and twitter have less reliable breaks
 en[["news"]] <- unlist(stri_split_boundaries(en[["news"]], type = "sentence", 
                                              skip_sentence_sep = TRUE))
 corp <- lapply(en, corpus)
-
-#TODO loop through gram creation
-unigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = TRUE, removeSeparators = TRUE, 
+unigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = TRUE, 
+                                             removeSeparators = TRUE, 
                                              concatenator = " ", ngrams = 1))
-bigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = TRUE, removeSeparators = TRUE, 
+bigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = TRUE, 
+                                            removeSeparators = TRUE, 
                                             concatenator = " ", ngrams = 2))
-trigram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = TRUE, removeSeparators = TRUE, 
-                                            concatenator = " ", ngrams = 3))
-quadgram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = TRUE, removeSeparators = TRUE, 
-                                            concatenator = " ", ngrams = 4))
-quintgram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = TRUE, removeSeparators = TRUE, 
-                                            concatenator = " ", ngrams = 5))
+# ...
+quintgram <- lapply(corp, function(x) tokenize(toLower(x), removePunct = TRUE, 
+                                               removeSeparators = TRUE, 
+                                               concatenator = " ", ngrams = 5))
 
 model.bi <- createModel(bigram, n = 2, k = 5)
 model.bi.hash <- model.bi
 model.bi.hash$idx <- as.integer(hashr::hash(model.bi.hash$idx))
+pos <- posModel(model.bi)
 
-samp.in <- createSample(unlist(lapply(r, sample, 1000))) #en
-samp.out <- createSample(getNPRText(3000, readLines("test/npr.key")))
+samp.in <- createSample(unlist(lapply(en, sample, 1000)))
+samp.out <- createSample(getNPRText(1, readLines("test/npr.key")))
 
 cleanInput <- Vectorize(cleanInput)
-testAlgorithm(samp.in, Vectorize(stupidBackoff), hash = TRUE)
-
-#TODO
-#OOV: report back for the tests that were correct, what is the frequency of the gram? 
-#want to elminiate low freq words with <unk>. retrain data. tokenize user input and check to make
-#sure all words found in unigram model. if not, replace with <unk> and then run algo.
-
-#convert @ to "at", other misc cleanup, ie "**text** handle twitter mentions. 
-#twitter hashtag removal. just remove octothorpe if it at the end of a tweet, otherwise,  gaps
+mods <- list(bi.model.hash, tri.model.hash, quad.model.hash, quint.model.hash)
+testAlgorithm(samp.out, Vectorize(stupidBackoffFixed), hash = TRUE)
