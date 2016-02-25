@@ -7,14 +7,12 @@ library(dplyr)
 library(hashr)
 library(quanteda)
 
-#TODO combine if chains from both predict functions
-
-bi.model.hash <- readRDS("model/model_bi_combined_top5_hash.RDS")
-tri.model.hash <- readRDS("model/model_tri_combined_top5_hash.RDS")
-quad.model.hash <- readRDS("model/model_quad_combined_top5_hash.RDS")
-quint.model.hash <- readRDS("model/model_quint_combined_top5_hash.RDS")
-unigrams <- readRDS("data/unigram_tf.s.RDS")
-pos <- readRDS("model/pos.RDS")
+bi.model.hash <- readRDS("../../model/model_bi_combined_top5_hash.RDS")
+tri.model.hash <- readRDS("../../model/model_tri_combined_top5_hash.RDS")
+quad.model.hash <- readRDS("../../model/model_quad_combined_top5_hash.RDS")
+quint.model.hash <- readRDS("../../model/model_quint_combined_top5_hash.RDS")
+unigrams <- readRDS("../../data/unigram_tf.s.RDS")
+speech <- readRDS("../../model/pos.RDS")
 
 sta <- Maxent_Sent_Token_Annotator()
 wta <- Maxent_Word_Token_Annotator()
@@ -38,7 +36,7 @@ stupidBackoff <- function(phrase, modelList, hash = FALSE, top = 1){
   #    
   #    Args:
   #      phrase:    Character vector of user input. Should be run through any preprocessing first.
-  #      modelList: A list of n-gram models, in ascending order
+  #      modelList: A list of n-gram models, in ascending n order
   #      hash:      Whether or not the models in modelList are hashed
   #      top:       Number indicating how many results to return
   #      
@@ -53,7 +51,9 @@ stupidBackoff <- function(phrase, modelList, hash = FALSE, top = 1){
   grams <- lapply(1:length(modelList), function(i) {
       p <- paste(phrase[(len - (i - 1)):len], collapse = " ")
       a <- modelList[[i]][modelList[[i]]$idx == ifelse(hash, hash(p), p), ]
-      cbind(a, n = if (nrow(a) > 0) a$n <- i + 1)
+      if (nrow(a) > 0)
+        a$n <- i + 1
+      a
   })
   
   ret <- rbind.fill(grams)
@@ -64,11 +64,11 @@ stupidBackoff <- function(phrase, modelList, hash = FALSE, top = 1){
   
   ifelse(length(phrase) > 0, 
          ret <- data.frame(idx = "POS", 
-                           gram = pos[pos$pos == NLP::annotate(phrase[len], pta, 
+                           gram = speech[speech$pos == NLP::annotate(phrase[len], pta, 
                                                                NLP::annotate(phrase[len], 
                                                                              list(sta, wta)))[2]
-                                      $features[[1]][[1]], 
-                                      "pred"], 
+                                                       $features[[1]][[1]], 
+                                        "pred"], 
                            freq = 0, n = 1, scores = 0, stringsAsFactors = FALSE), 
          ret <- data.frame(idx = "", gram = "", freq = 0, n = 1, scores = 0, stringsAsFactors = FALSE)
   )
@@ -91,6 +91,9 @@ simpleInterpolation <- function(phrase, lambda = 0.4, top = 1, hash = F, bi.mode
   #      
   #    Returns:
   #      A data frame of up to the top k next-word predictions 
+  #
+  #    TODO:
+  #     Combine if chains from both predict functions
   
   score <- function(modelResult, modelList){
     # Unigram list is mandatory as first model. Additional models need to be in asc n order
@@ -155,7 +158,7 @@ simpleInterpolation <- function(phrase, lambda = 0.4, top = 1, hash = F, bi.mode
                        ifelse(!is.null(bi),
                               ret <- cbind(score(bi, list(unigrams)), 2),
                               ifelse(len > 0, {
-                                gram <- pos[pos$pos == NLP::annotate(phrase[len], pta, 
+                                gram <- speech[speech$pos == NLP::annotate(phrase[len], pta, 
                                                                      NLP::annotate(phrase[len],
                                                              list(sta, wta)))[2]$features[[1]][[1]],
                                             "pred"]
@@ -248,7 +251,7 @@ simpleInterpolation2 <- function(phrase, lambda = 0.4, top = 1, hash = F, bi.mod
                        ifelse(!is.null(bi),
                               ret <- cbind(score(bi, list(unigrams)), 2),
                               ifelse(len > 0, {
-                                gram <- pos[pos$pos == NLP::annotate(phrase[len], pta, 
+                                gram <- speech[speech$pos == NLP::annotate(phrase[len], pta, 
                                                                      NLP::annotate(phrase[len],
                                                             list(sta, wta)))[2]$features[[1]][[1]], 
                                             "pred"]
@@ -308,7 +311,7 @@ stupidBackoffFixed <- function(phrase, hash = F, top = 1, bi.model = bi.model.ha
     return(ret[order(ret$n, ret$Freq, decreasing = TRUE), ][1:top, ])
   
   ifelse(length(phrase) > 0, 
-         ret <- data.frame(idx = "POS", gram = pos[pos$pos == NLP::annotate(phrase[len], pta, 
+         ret <- data.frame(idx = "POS", gram = speech[speech$pos == NLP::annotate(phrase[len], pta, 
                                                                           NLP::annotate(phrase[len], 
                                                  list(sta, wta)))[2]$features[[1]][[1]], "pred"], 
                          freq = 0, n = 1, scores = 0, stringsAsFactors = FALSE), 

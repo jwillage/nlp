@@ -3,17 +3,15 @@ library(shinyjs)
 library(grid)
 source("predict.R")
 
-#todo remove plot if no results
-#todo add clear button
 shinyServer(
-  function(input, output){
+  function(input, output, session){
     toggle("inputBox")
     toggle("main")
     pred <- reactive({
       if(input$method == 'b')
-        return(stupidBackoff(cleanInput(input$fragment), hash = T, top = input$k, 
-                                           bi.model = bi.model, tri.model = tri.model, 
-                                           quad.model = quad.model, quint.model = quint.model))  
+        return(stupidBackoffFixed(cleanInput(input$fragment), hash = T, top = input$k, 
+                                           bi.model = bi.model.hash, tri.model = tri.model.hash, 
+                                           quad.model = quad.model.hash, quint.model = quint.model.hash))  
       p <- simpleInterpolation(cleanInput(input$fragment), hash = T, top = input$k, bi.model = bi.model,
                           tri.model = tri.model, quad.model = quad.model, quint.model = quint.model)
       p <- p[complete.cases(p),]
@@ -55,8 +53,6 @@ shinyServer(
         guides(fill = F)
       print(g)}
   })
-  
-
   }
 )
 
